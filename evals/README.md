@@ -35,6 +35,7 @@ For a focused follow-up, add `--case parallel --case plan-handoff --arm with-ski
 - `result.json`: independent functional/test outcomes, native orchestration observations, elapsed time, and usage. `benchmark.json` retains completed runs and identifies paired or focused execution; `blocked.json` records a run-level blocker. Interrupted runs retain available descendant transcripts and `interruption.json`, including recovery errors. An interruption request alone does not prove all workers stopped.
 - Usage sums each native session once; transcript messages and cumulative session totals are never both added. Root totals are treated as that session's usage, with linked child usage added separately. Default zero counters from failed inference are not measurements; unavailable values are `null`.
 - A recorded native shell command can establish manager verification. Prose claims cannot. Native Code Mode `metadata.toolCalls` records are inspected alongside direct tools. If a version hides nested execution without native records, audit and no-polling evidence stay unknown rather than passing from code text alone. Silence grading examines every intermediate assistant text block, allowing the model notice and necessary handoff/blocker messages rather than checking a short list of progress phrases.
+- OpenCode acceptance also checks the native process exit code for each distinct post-worker test command. Tool completion alone cannot establish passing tests. A successful check for another piece cannot erase a failed check; missing exit evidence stays unknown.
 - Scenarios marked `scenario` in `evals.json` require controlled interaction/fault injection or a manual harness run. Offline tests validate recorder behavior, not model compliance with those scenarios. No synthetic event fixture counts as a live behavioral pass.
 - One paired run per case cannot establish a general savings guarantee. Unexecuted harnesses and mode transitions remain unverified.
 
@@ -61,3 +62,33 @@ python -B -m evals.review ../oversee-workspace/reliability-pilot-go --output ../
 ```
 
 Before executing checks, review compares every retained project against its recorded final snapshot. Missing or changed artifacts stop review before output creation. Older snapshots retain their original exclusions, including `.opencode`; their excluded files cannot be verified retrospectively. These local hashes detect drift, not deliberate alteration of both files and records. The derived report corrects the original recorder's recognition of hydrated native skill attachments and separates final answers from intermediate text. Original native evidence remains unchanged. Review output reflects the current grader, not a new behavioral run.
+
+## Codex smoke tests (2026-10-15)
+
+The installed Codex CLI is `0.162.0-alpha.17.2` on Windows. Official [app-server documentation](https://learn.chatgpt.com/docs/app-server) and the installed generated schema were checked before dispatch. Use exact live catalog IDs and supported effort levels; this adapter is development tooling, not a runtime dependency of the skill.
+
+```text
+python -B -m evals.codex_run --manager gpt-6.1-sol --manager-effort medium --worker gpt-6-luna --worker-effort max --output ../oversee-workspace/codex-new --preflight
+```
+
+These settings were explicitly selected by the caller. Remove `--preflight` for three unpaired smoke cases, or use `--case explain`, `--case parallel`, or `--case plan-handoff` for a focused run. Unsupported inputs stop before inference. Skills are staged in fixture-local `.agents/skills/oversee`; real-profile installations and settings remain unchanged. Each case uses a separate stdio app-server with workspace-write execution, restricted network, and no automatic permission grants. Plan preparation uses native Plan mode and read-only sandboxing; the test host explicitly switches the next turn to Default and enables fixture writes. No second skill invocation is sent. API request transport timeouts are separate from the notification wait, which has no default worker deadline.
+
+`events.json` retains native notifications and their receipt times, including tools omitted from projected thread history. `native.json` retains available thread records and persisted `turn_context` entries. Current `subAgentActivity.agentThreadId`, generic child-thread notifications, and legacy receiver arrays all identify descendants. Configured thread settings alone do not prove a turn's model/effort. Usage uses the latest cumulative native token counters for each unique root/child thread; missing metrics and cost remain unknown. The runner's exit status covers functional smoke checks; it does not certify orchestration.
+
+Review completed evidence without inference, using a new destination:
+
+```text
+python -B -m evals.codex_review ../oversee-workspace/codex-smoke-1 --output ../oversee-workspace/codex-review-new
+```
+
+Review checks final file hashes before executing project tests, recovers this run's persisted root/child contexts through app-server, and grades native events independently. This requires the same local Codex history to remain available. It does not overwrite original evidence. Interrupted/incomplete cases retain events, but are not successful smoke runs. Recovery and cancellation requests do not prove all background work stopped.
+
+Observed evidence is in `oversee-workspace/codex-smoke-1`, with derived review in `oversee-workspace/codex-smoke-1-reviewed`. All three functional cases passed. Ordinary-question behavior left files unchanged and dispatched no workers. Parallel implementation passed eight tests and strict observed orchestration checks in 79.77 seconds, with two overlapping exact-model workers and manager verification. Dependent implementation passed fourteen tests and independent probes in 201.63 seconds; native contexts verify Plan-to-Default transition, exact retained model settings, and sequential workers. It still emitted routine progress narration and fails strict silence. Ordinary-question runtime was 18.16 seconds. These three cases comprise seven distinct threads. Cost is unknown, and there is no new Codex baseline arm or savings claim.
+
+The initial smoke exporter missed current child-event shapes; original projected `native.json` files contain incomplete child coverage. The derived review recovers children from retained native events and persisted contexts without additional inference. Original event evidence remains intact. The original Plan-phase snapshot was recorded as a driver-computed equality result; future runs retain the actual phase hashes too. Retry limits, dirty-workspace preservation, cancellation, and denied handoff still require controlled behavioral tests.
+
+## Other harnesses
+
+As of 2026-10-15, Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed; standalone agent CLIs were not found on PATH or the checked common locations. Their GUI workflows were not exercised. No harness installers, account changes, or global skill installs were performed. Current [Antigravity skill docs](https://antigravity.google/docs/skills/) now confirm separate app and CLI global paths and automatic CLI slash commands; this resolves documentation uncertainty, not live discovery.
+
+For each remaining harness, stage the portable payload only in a throwaway workspace, select supported manager/worker settings, and run the three existing pilot prompts with equivalent acceptance checks. Preserve native events, exact resolved settings, before/after artifacts, and host mode transitions. Verify ordinary and quoted commands do not activate oversee. Run retry/cancellation/dirty-workspace/denied-handoff scenarios under controlled interaction. Record launch, authentication, permission, or schema blockers separately from skill failures. Do not add auto-approval flags to make a harness pass.

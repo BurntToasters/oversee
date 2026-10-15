@@ -1,5 +1,9 @@
 # oversee
 
+Version: `1.0.0` (preview).
+
+Release status: suitable for a preview with the documented limits. OpenCode and Codex have limited live smoke coverage. Stable readiness still needs other harnesses, controlled retry/cancellation/dirty-workspace cases, and result-only reporting compliance. Current macOS/WSL installer verification is also pending.
+
 An [Agent Skill](https://agentskills.io) for a manager model to oversee worker subagents without micromanaging them. You choose any model and effort supported by your current harness; names in examples are not defaults or an allowlist.
 
 The manager plans the work, dispatches independent pieces within available concurrency, waits without polling, audits changes against the starting workspace, runs checks itself, and reports the result. Fewer manager check-ins is the design goal; lower total tokens or cost is not yet established by a successful live pilot.
@@ -123,13 +127,15 @@ User/harness deadlines and cancellation stop further dispatch and request cancel
 
 ## Development
 
+- `version.txt` is the skill's version source. Run `python bump-ver.py patch`, `minor`, `major`, or an exact version such as `0.2.0-rc.1`. The script synchronizes `version.txt`, skill metadata, and the README version line; it preserves line endings and leaves model/harness versions and historical evidence unchanged. Add new current-version declarations to `TARGETS` in the script.
+- Run `python bump-ver.py --check` before a release. Use `python bump-ver.py patch --dry-run` to preview. The script stops on version drift or missing declarations before changing files. Version tooling is development-only and is not installed with the skill.
 - Eval scenarios live in [`evals/evals.json`](evals/evals.json). The catalog includes manual/fault-injection scenarios as well as the three automated pilot cases; adding a scenario is not evidence it passed.
 - Run offline regression checks with `python -B -m unittest discover -s tests -v`. Installer checks use throwaway profiles; Bash and Windows-specific checks skip when their platform is unavailable. No dependencies beyond Python's standard library are needed for these tests.
 - Run the paired pilot with [`evals/run.py`](evals/run.py); procedure and evidence limits are in [`evals/README.md`](evals/README.md).
 - Focused reruns can select cases and one arm; they are marked unpaired. Regrading rejects retained projects that differ from their recorded final hashes.
 - Repo conventions and remaining verification gaps are in [`AGENTS.md`](AGENTS.md).
 
-The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. The new recorder retains native events, independently checks resulting behavior, and reports correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Other harnesses remain documentation-checked until live-tested.
+The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code, Copilot, Cursor, and Antigravity remain documentation-checked until live-tested.
 
 The Go pilot and two focused follow-ups passed overseen coding checks, including Plan-to-Build handoff. They still emitted routine narration, so result-only compliance remains unproven. Measured results and retained failures are documented in [`evals/README.md`](evals/README.md).
 

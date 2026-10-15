@@ -16,15 +16,16 @@ The skill must work in Claude Code, OpenCode, Codex, GitHub Copilot, Cursor, and
 
 Owner: BurntToasters. License: MIT.
 
-## Status (2026-10-14)
+## Status (2026-10-15)
 
 | Item | State |
 |---|---|
 | Design | Mostly settled. See Decisions below |
 | `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Current regression suite covers Windows cmd/PowerShell and Git Bash. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
 | `SKILL.md` | Explicit activation, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
-| `references/harnesses.md` | Versioned official sources; OpenCode v2.0.29 CLI/schema observed; other hosts not live-tested |
-| `evals/` | 18 scenarios, native-event recorder and drift-checked review tool, 53 offline tests; six paired Go sessions plus two coding follow-ups passed overseen behavior checks; narration compliance still fails |
+| `references/harnesses.md` | Official sources rechecked 2026-10-15; OpenCode v2.0.29 and Codex CLI 0.162.0-alpha.17.2 have live smoke evidence; other hosts not live-tested |
+| `evals/` | 18 scenarios, OpenCode/Codex native evidence and review tools, 72 offline tests including version tooling; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
+| `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
 | `README.md` | Written with install, uninstall, compatibility, and usage instructions |
 
 ## Decisions
@@ -47,6 +48,14 @@ Items 1 to 5 and 7 to 8 were agreed with the owner. Change them only with the ow
 10. **Universal core.** `SKILL.md` must not depend on one harness's tool names or model IDs. Harness details go in `references/`.
 11. **Plan mode.** A ready conversation plan counts as existing work. Prepare briefs, retain the worker choice, and use native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers.
 12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
+
+## Invocation wording
+
+- Interpret an actual invocation using the surrounding message and conversation. Natural wording such as `use <model>`, a model-only invocation, and task text before or after `/oversee` should preserve the user's intent. The host must first recognize and deliver the invocation; the skill cannot change a host's slash-command parser.
+- Reuse a ready plan, pasted audit findings, or an explicit coding task as scope. A model-only invocation uses existing work; if none exists, ask what to oversee. If a model is named without effort, choose a supported effort by difficulty, as specified in `SKILL.md`.
+- Adding `/oversee` to a ready plan while in Plan mode prepares oversight for implementation after host approval. Retain scope and worker selection; require neither another invocation nor duplicate dispatch after execution is enabled.
+- An audit-and-fix request means the manager audits first, turns actionable findings into scoped implementation pieces, then dispatches workers and verifies fixes. Resolve ambiguous findings or acceptance gaps before dispatch.
+- User examples illustrate intent, not an exhaustive grammar or model allowlist. Quoted examples and discussions of these forms must not activate the workflow. Keep installed behavior in `SKILL.md`; this file is repository guidance only.
 
 ## SKILL.md outline
 
@@ -78,7 +87,7 @@ The scripts write those two items to four folders:
 | `~/.agents/skills/oversee` | OpenCode, Codex, Copilot, Cursor. Antigravity app per the Google codelab | Tool docs |
 | `~/.claude/skills/oversee` | Claude Code. OpenCode and Cursor also read it, so they may see two copies | Tool docs |
 | `~/.gemini/config/skills/oversee` | Antigravity app | Antigravity docs. The codelab names a different path |
-| `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI | Google codelab only |
+| `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI | Official skills docs and Google codelab |
 
 Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder from these four locations and nothing else.
 
@@ -90,7 +99,7 @@ Internet install, added 2026-10-14:
 - Installers stage and validate both managed items, replace the entire references subtree, and restore previous managed payload on replacement failure. Updates preserve unrelated files at the destination root and neighboring skills. Each target is a separate transaction; recovery failures must retain and report backup paths.
 - README documents that download-and-execute one-liners run remote code; avoid unsupported blanket claims about Windows signing policy.
 
-## Harness reference (checked 2026-10-14)
+## Harness reference (checked 2026-10-15)
 
 Doc links are under Sources at the end.
 
@@ -104,7 +113,7 @@ Doc links are under Sources at the end.
 | Copilot CLI | `/oversee` in the prompt |
 | Cursor | `/oversee` in Agent chat |
 | Antigravity app | `/oversee` in the prompt panel |
-| Antigravity CLI | `/skills` lists skills. Typing `/oversee` is not checked |
+| Antigravity CLI | Official docs confirm skills become slash commands such as `/oversee`; not live-tested here |
 
 ### Subagents
 
@@ -127,7 +136,7 @@ Model IDs and variants are location/version-specific. Discover them at run time;
 | OpenCode v2 | Native transition if exposed, otherwise user switches Plan to Build; controlled eval uses native session agent switch |
 | OpenCode v1 | User Plan/Build control; programmatic handoff unverified |
 | Claude Code | Native plan approval/exit; user permission-mode control if tool absent |
-| Codex | Host-controlled transition; retain ready plan and worker choice until execution is enabled |
+| Codex | Native app-server Plan-to-Default transition smoke-tested; retain ready plan and worker choice until host enables execution; UI remains unverified |
 | Cursor | User clicks Build after reviewing plan |
 | Copilot / Antigravity | Specific programmatic transitions unverified; request host implementation mode |
 
@@ -155,17 +164,21 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - Keep this file under 32 KiB so Codex reads all of it.
 - Evals: test prompts go in `evals/evals.json`. That folder is not installed. Run outputs go in a sibling `oversee-workspace` folder, outside this repo.
 - Don't commit or push unless the owner asks.
+- `version.txt` is the canonical skill version. Use `python bump-ver.py patch|minor|major` or an exact semantic version to sync every current declaration; register new declarations in the script's `TARGETS`. Run `python bump-ver.py --check` before release. Do not change model/harness versions or historical eval evidence when bumping the skill. Version tooling is not installed.
 - Keep comments short. The scripts have one-line header comments; keep them that way.
 
 ## Verification and remaining gaps
 
 - Run `python -B -m unittest discover -s tests -v` for deterministic installer/evidence checks. Tests use temporary profiles and mock downloads; no real-profile installs or live inference.
 - `evals/run.py` records six paired OpenCode sessions with caller-specified manager/worker settings. Outputs belong in a new sibling workspace folder. Usage/cost must come from native records; missing measurements stay unknown.
+- `evals/codex_run.py` records unpaired Codex smoke cases with caller-specified settings and native completion events. `evals/codex_review.py` validates retained file hashes and recovers root/child turn contexts without inference. Do not apply OpenCode's transcript schema to Codex events. Current and legacy child-event shapes require coverage; thread configuration alone is not per-turn execution proof.
 - The older three-case 100% versus 55% score graded workflow compliance using summary logs. It is not evidence of coding superiority or savings. Do not repeat it as a performance claim.
-- First attempt failed Console authentication. At the caller's direction, six Go sessions then ran using Muse Spark 1.3 Contributor xhigh and DeepSeek V4.1 Flash max. Both overseen coding cases passed independent behavior checks, with exact workers, concurrency/dependencies, and Plan handoff observed. Extra narration and an uncleaned worker test artifact prevent full compliance claims. Final silence/scratch wording remains unverified live. The verified pilot artifact was removed.
+- First attempt failed Console authentication. At the caller's direction, six Go sessions then ran using Muse Spark 1.3 Contributor xhigh and DeepSeek V4.1 Flash max. Both overseen coding cases passed independent behavior checks, with exact workers, concurrency/dependencies, and Plan handoff observed. Two coding follow-ups retested final silence/scratch wording: behavior and handoff passed, but narration compliance still failed. The original verified scratch artifact was removed; external filesystem cleanliness is not proven by the follow-up reports.
 - Evidence: `../oversee-workspace/reliability-pilot-go/`; corrected derived review: `../oversee-workspace/reliability-pilot-go-reviewed/`. Small-pilot native costs were higher with oversee ($0.029469 versus $0.006872); dependent baseline was incomplete. No savings claim is justified.
+- Codex smoke evidence: `../oversee-workspace/codex-smoke-1/`; recovered/graded evidence: `../oversee-workspace/codex-smoke-1-reviewed/`. Caller chose GPT-6.1 Sol medium with GPT-6 Luna max. Ordinary-question and parallel cases passed observed orchestration checks; dependent implementation passed behavior, exact settings, and native handoff, but failed silence. Original exporter missed current child-event shapes; derived review recovers them from retained native events without more model calls. Cost is unknown.
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
-- Other harnesses, duplicate global discovery, the two Antigravity path candidates, macOS, and WSL in the current revision still need live verification. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
+- Wording flexibility is intended behavior, not comprehensive live coverage. Add eval variations for natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, and combined audit-and-fix requests. Include negative quoted examples and host parser limits. Do not claim exact wording passed without retained evidence.
+- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Other harnesses, duplicate global discovery, macOS, and WSL in the current revision still need live verification. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
 - Default effort selection remains a relative difficulty heuristic limited to each model's supported variants. No cross-model strength ranking is claimed.
 
 ## Glossary
@@ -179,7 +192,7 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 
 ## Sources
 
-Checked 2026-10-14.
+Checked 2026-10-15; source dates in retained evidence remain historical.
 
 - Agent Skills spec: https://agentskills.io/specification
 - Claude Code skills: https://code.claude.com/docs/en/skills

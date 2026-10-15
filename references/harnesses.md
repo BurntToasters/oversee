@@ -1,6 +1,6 @@
 # Harness reference
 
-Checked 2026-10-14 against the linked official docs. Local CLI observed: OpenCode v2.0.29. Other harnesses are documentation-checked, not live-tested here. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
+Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode v2.0.29 and Codex CLI 0.162.0-alpha.17.2 on Windows. Other harnesses remain documentation-checked. Smoke coverage is limited; it does not establish full compatibility. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
 
 ## Common rules
 
@@ -20,7 +20,7 @@ Checked 2026-10-14 against the linked official docs. Local CLI observed: OpenCod
 | Copilot CLI | `/oversee` | Retain execution guard even if host loads relevant skills automatically. |
 | Cursor | `/oversee` | Retain execution guard; discussing the skill is not invoking it. |
 | Antigravity app | `/oversee` | Check the installed app/version's UI. |
-| Antigravity CLI | Skill selection | Codelab documents `/skills`; slash invocation remains unverified. |
+| Antigravity CLI | `/oversee` | Current official docs describe automatic conversion of skills to slash commands. Documentation-checked; not live-tested. |
 
 Installation paths are discovery candidates, not proof of full behavior. Duplicate discovery from `.agents` and `.claude` needs a local smoke test. Installers never change host settings.
 
@@ -65,9 +65,10 @@ Sources: [subagents](https://code.claude.com/docs/en/sub-agents), [interactive m
 - Model/effort can be requested per spawn or in profiles. Explicit custom-agent settings may override spawn requests. Check actual precedence and resolved metadata.
 - Some schemas expose `spawn_agent` and `fork_turns: "none"` for fresh context and explicit settings. Full-history forks may force inheritance. Use fields only when present.
 - Use blocking waits/completion events, respect thread limits, and close settled threads where appropriate.
-- Host controls Plan mode. Retain plan and worker choice, present native handoff, and await execution mode. An approval sentence or skill cannot override active host restrictions. Exact UI transition is not live-verified here.
+- Host controls Plan mode. Retain plan and worker choice, present native handoff, and await execution mode. An approval sentence or skill cannot override active host restrictions. App-server `turn/start` accepts native `collaborationMode` settings; controlled smoke tests verified Plan-to-Default transition in the same thread, with read-only preparation and workspace-write execution. The interactive UI transition remains unverified.
+- Live Windows smoke tests verified explicit project-local skill attachment, exact manager/worker model and effort, concurrent independent workers, manager checks, and dependent handoff. Dependent work still emitted extra progress narration. These observations do not cover retries, cancellation, or other platforms.
 
-Sources: [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [skills](https://learn.chatgpt.com/docs/build-skills), [configuration](https://learn.chatgpt.com/docs/config-file/config-reference), [AGENTS.md](https://developers.openai.com/codex/agent-configuration/agents-md). Fresh-context fields also observed in this Codex session's schema.
+Sources: [subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), [skills](https://learn.chatgpt.com/docs/build-skills), [configuration](https://learn.chatgpt.com/docs/config-file/config-reference), [AGENTS.md](https://developers.openai.com/codex/agent-configuration/agents-md), [app-server](https://learn.chatgpt.com/docs/app-server). Fresh-context fields and mode selection also checked against local schemas and retained smoke evidence.
 
 ## GitHub Copilot
 
@@ -83,14 +84,16 @@ Sources: [CLI agents](https://docs.github.com/en/copilot/concepts/agents/copilot
 - Native `Task` supports concurrent subagents. Built-ins include Explore and Browser. Profiles: `.cursor/agents/`; compatible Claude/Codex locations also read.
 - `model` accepts `inherit` or supported ID. Options use brackets, e.g. `[effort=high]`, according to the selected model. Plan/admin restrictions can force fallback; check actual metadata.
 - Plan mode: user reviews plan, then clicks Build. Retain oversee handoff; do not implement while Plan mode remains active.
+- The editor launcher and standalone agent CLI are separate test surfaces. Local Cursor 3.24.18 exposes editor help; no standalone `agent`/`cursor-agent` was found on PATH. Do not treat editor presence as a passing CLI test. Headless documentation describes `--force`/`--yolo`; never add these automatically to bypass approval. Verify workspace permissions and actual installed CLI behavior before headless implementation.
 
-Sources: [subagents](https://cursor.com/docs/subagents), [Plan mode](https://cursor.com/help/ai-features/plan-mode).
+Sources: [subagents](https://cursor.com/docs/subagents), [Plan mode](https://cursor.com/help/ai-features/plan-mode), [CLI overview](https://cursor.com/docs/cli/overview), [headless mode](https://cursor.com/docs/cli/headless), [CLI permissions](https://cursor.com/docs/cli/reference/permissions).
 
 ## Antigravity
 
 - Native `invoke_subagent` runs concurrent children and returns messages. Built-ins include `research`, `self`; browser has a dedicated invocation flow.
 - Profiles: `.agents/agents/`, `~/.gemini/config/agents/`. Documented `model` takes tiers: `inherit`, `flash`, `pro`. Converting arbitrary provider models to tiers needs user agreement.
 - Retain ready plan and request exposed native approval/implementation flow. Specific transition tool is unverified; ask user to enable execution if absent.
+- Official skill docs now distinguish app/IDE global `~/.gemini/config/skills/` from CLI global `~/.gemini/antigravity-cli/skills/`; both use project `.agents/skills/`. CLI automatically converts skills to slash commands. Both installer destinations remain appropriate. Local Antigravity app 2.23.1.0 is installed, but no `agy`/agent CLI was found on PATH; discovery and execution remain unverified live.
 
 Sources: [subagents](https://antigravity.google/docs/subagents/), [skills](https://antigravity.google/docs/skills/).
 

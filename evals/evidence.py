@@ -117,6 +117,14 @@ def grade(transcripts, case, with_skill, worker, phase=None):
                     if t.get("name", "").lower() in ("shell", "bash", "powershell")]
         checks["manager_runs_checks_after_workers"] = any(
             re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b", s) for s in commands)
+        test_calls = [t for t in post if t.get("name", "").lower() in ("shell", "bash", "powershell")
+                      and re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b",
+                                   t.get("state", {}).get("input", {}).get("command", ""))]
+        # A completed shell tool can still contain a failed test process.
+        latest_checks = {t["state"]["input"]["command"]: t["state"].get("metadata", {}).get("exit") for t in test_calls}
+        exits = list(latest_checks.values())
+        checks["manager_checks_succeeded"] = (False if any(code is not None and code != 0 for code in exits)
+            else None if not exits or any(code is None for code in exits) else True)
         checks["manager_inspects_changes"] = any(
             re.match(r"\s*git\s+diff\b", s) and not re.search(r"--(?:stat|name-only|name-status)\b", s)
             for s in commands) or any(

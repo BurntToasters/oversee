@@ -4,7 +4,7 @@ description: Run /oversee for coding work, including implementation of a ready p
 license: MIT
 compatibility: Requires native subagents or a headless CLI that can preserve the session's permissions. Implementation requires the host's execution mode. Harness details live in references/harnesses.md.
 metadata:
-  version: "0.1.0"
+  version: "1.0.0"
   opencode/slash: "true"
   opencode/autoinvoke: "false"
 ---

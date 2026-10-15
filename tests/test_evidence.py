@@ -31,6 +31,27 @@ def model(provider="example", name="Example Worker V4.1", model_id="worker-v4.1"
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_completed_shell_with_failed_tests_does_not_establish_acceptance(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"][0]["content"] = [{"type": "tool", "name": "shell", "time": {"created": 5},
+            "state": {"status": "completed", "input": {"command": "python -m unittest"}, "metadata": {"exit": 1}}}]
+        checks = grade([root, child], "parallel", True, WORKER)["checks"]
+        self.assertTrue(checks["manager_runs_checks_after_workers"])
+        self.assertFalse(checks["manager_checks_succeeded"])
+        root["messages"][0]["content"][0]["state"]["metadata"]["exit"] = 0
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+
+    def test_passing_second_piece_does_not_erase_failed_first_piece_check(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        calls = [{"type": "tool", "name": "shell", "time": {"created": 5 + index}, "state": {
+            "status": "completed", "input": {"command": f"python -m unittest tests.test_{name}"}, "metadata": {"exit": code}}}
+            for index, (name, code) in enumerate([("left", 1), ("right", 0)])]
+        root["messages"][0]["content"] = calls
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+        calls.append(copy.deepcopy(calls[0]))
+        calls[-1]["state"]["metadata"]["exit"] = 0
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+
     def test_usage_deduplicates_sessions_not_messages(self):
         root, child = transcript(), transcript("child", "root")
         root["messages"] = [{"type": "assistant", "cost": 999, "tokens": {"input": 999}}]
