@@ -110,6 +110,50 @@ class EvidenceTests(unittest.TestCase):
         sequential[2]["info"]["time"]["created"] = 1.5
         self.assertTrue(grade(sequential, "parallel", True, WORKER)["checks"]["parallel_overlap"])
 
+    def test_dependent_workers_require_diff_and_passing_check_between_dispatches(self):
+        root = transcript()
+        first = transcript("first", "root", created=1, idle=2)
+        second = transcript("second", "root", created=3, idle=4)
+        root["messages"][0]["content"] = [
+            {"type": "tool", "name": "shell", "time": {"created": 2.2, "ran": 2.3, "completed": 2.4}, "state": {
+                "status": "completed", "input": {"command": "python -m unittest tests.test_first"},
+                "metadata": {"exit": 0}}},
+            {"type": "tool", "name": "shell", "time": {"created": 2.5, "ran": 2.6, "completed": 2.7}, "state": {
+                "status": "completed", "input": {"command": "git diff"}, "metadata": {"exit": 0}}}]
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertTrue(checks["dependent_workers_sequenced"])
+        self.assertTrue(checks["dependent_manager_acceptance_between_workers"])
+        root["messages"][0]["content"][0]["time"]["completed"] = 3.2
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertFalse(checks["dependent_manager_acceptance_between_workers"])
+
+    def test_dependent_acceptance_with_missing_exit_code_is_unknown(self):
+        root = transcript()
+        first = transcript("first", "root", created=1, idle=2)
+        second = transcript("second", "root", created=3, idle=4)
+        root["messages"][0]["content"] = [
+            {"type": "tool", "name": "shell", "time": {"created": 2.2, "ran": 2.3, "completed": 2.4}, "state": {
+                "status": "completed", "input": {"command": "python -m unittest"}, "metadata": {}}},
+            {"type": "tool", "name": "shell", "time": {"created": 2.5, "ran": 2.6, "completed": 2.7}, "state": {
+                "status": "completed", "input": {"command": "git diff"}, "metadata": {}}}]
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertIsNone(checks["dependent_manager_acceptance_between_workers"])
+
+    def test_dependent_acceptance_with_missing_completion_timestamp_is_unknown(self):
+        root = transcript()
+        first = transcript("first", "root", created=1, idle=2)
+        second = transcript("second", "root", created=3, idle=4)
+        root["messages"][0]["content"] = [
+            {"type": "tool", "name": "shell", "time": {"created": 2.2, "ran": 2.3}, "state": {
+                "status": "completed", "input": {"command": "python -m unittest"}, "metadata": {"exit": 0}}},
+            {"type": "tool", "name": "shell", "time": {"created": 2.5, "ran": 2.6, "completed": 2.7}, "state": {
+                "status": "completed", "input": {"command": "git diff"}, "metadata": {"exit": 0}}}]
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertIsNone(checks["dependent_manager_acceptance_between_workers"])
+
     def test_ordinary_question_rejects_activation_and_workers(self):
         root = transcript()
         root["messages"] = [{"type": "assistant", "content": [{"type": "text", "text": ".notes.json stores id, title, body"}]}]

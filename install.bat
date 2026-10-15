@@ -9,20 +9,23 @@ if not exist "%SRC%SKILL.md" goto :missing
 if not exist "%SRC%references\harnesses.md" goto :missing
 for %%F in ("%SRC%SKILL.md" "%SRC%references\harnesses.md") do if %%~zF==0 goto :missing
 
-call :install_to "%USERPROFILE%\.agents\skills\oversee"
+set "DEST=%USERPROFILE%\.agents\skills\oversee"
+call :install_to
 if errorlevel 1 goto :fail
-call :install_to "%USERPROFILE%\.claude\skills\oversee"
+set "DEST=%USERPROFILE%\.claude\skills\oversee"
+call :install_to
 if errorlevel 1 goto :fail
-call :install_to "%USERPROFILE%\.gemini\config\skills\oversee"
+set "DEST=%USERPROFILE%\.gemini\config\skills\oversee"
+call :install_to
 if errorlevel 1 goto :fail
-call :install_to "%USERPROFILE%\.gemini\antigravity-cli\skills\oversee"
+set "DEST=%USERPROFILE%\.gemini\antigravity-cli\skills\oversee"
+call :install_to
 if errorlevel 1 goto :fail
 echo Start a new agent session to load the skill.
 pause
 exit /b 0
 
 :install_to
-set "DEST=%~f1"
 set "OLD_SKILL=0"
 set "OLD_REFS=0"
 set "NEW_SKILL=0"

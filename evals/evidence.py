@@ -52,6 +52,23 @@ def tools(transcript):
                     yield from nested(item.get("state", {}).get("metadata", {}), item.get("time", {}))
 
 
+def completed_between(calls, start, end, matches):
+    selected, unknown_end, late = [], False, False
+    for tool in calls:
+        if not matches(tool):
+            continue
+        times = tool.get("time", {})
+        created, completed = times.get("created"), times.get("completed")
+        if completed is None:
+            if created is None or created < end:
+                unknown_end = True
+        elif start <= completed < end:
+            selected.append(tool)
+        elif created is not None and created < end and completed >= end:
+            late = True
+    return selected, unknown_end, late
+
+
 def text_content(transcript):
     return "\n".join(part.get("text", "")
                      for msg in transcript.get("messages", []) if msg.get("type") == "assistant"
@@ -172,6 +189,38 @@ def grade(transcripts, case, with_skill, worker, phase=None):
             windows = sorted((t["info"]["time"]["created"], t["info"]["time"].get("idle")) for t in worker_calls)
             checks["dependent_workers_sequenced"] = len(windows) >= 2 and all(
                 b is not None and b <= c for (_, b), (c, _) in zip(windows, windows[1:]))
+            if len(windows) >= 2 and windows[0][1] is not None:
+                start, end = windows[0][1], windows[1][0]
+                shell = lambda t: t.get("name", "").lower() in ("shell", "bash", "powershell")
+                tests_between, tests_unknown, tests_late = completed_between(calls, start, end, lambda t: shell(t) and
+                    re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b",
+                             t.get("state", {}).get("input", {}).get("command", "")))
+                latest_between = {}
+                for tool in sorted(tests_between, key=lambda t: t.get("time", {}).get("completed", float("-inf"))):
+                    latest_between[tool["state"]["input"]["command"]] = tool
+                diff_tools, diff_unknown, diff_late = completed_between(calls, start, end, lambda t: shell(t) and
+                    re.match(r"\s*git\s+diff\b", t.get("state", {}).get("input", {}).get("command", "")) and
+                    not re.search(r"--(?:stat|name-only|name-status)\b",
+                                  t.get("state", {}).get("input", {}).get("command", "")))
+                diff_between = any(t.get("state", {}).get("status") == "completed" for t in diff_tools)
+                exits_between = list(latest_between.values())
+                codes_between = [t.get("state", {}).get("metadata", {}).get("exit") for t in exits_between]
+                if tests_late or any(t.get("state", {}).get("status") != "completed" for t in exits_between) \
+                        or any(code is not None and code != 0 for code in codes_between):
+                    passed_between = False
+                elif tests_unknown:
+                    passed_between = None
+                elif not exits_between:
+                    passed_between = False
+                elif any(code is None for code in codes_between):
+                    passed_between = None
+                else:
+                    passed_between = True
+                checks["dependent_manager_acceptance_between_workers"] = (
+                    False if passed_between is False or diff_late or (diff_tools and not diff_between) else
+                    None if passed_between is None or diff_unknown else diff_between)
+            else:
+                checks["dependent_manager_acceptance_between_workers"] = False
     else:
         checks["direct_baseline"] = not children
     checks["sessions_succeeded"] = all(t["info"].get("outcome") == "succeeded" for t in transcripts)

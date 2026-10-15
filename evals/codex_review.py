@@ -16,6 +16,57 @@ def completed_items(events, root):
             and event["message"]["params"].get("threadId") == root]
 
 
+def _unittest_invocation(command):
+    pattern = r"python(?:3)?(?:\.exe)?\s+(?:-B\s+)?-m\s+unittest\b"
+    wrapper = re.match(
+        r"(?:\"[^\"]*(?:powershell|pwsh)\.exe\"|'[^']*(?:powershell|pwsh)\.exe')\s+-Command\s+(['\"])",
+        command, re.I)
+    body = command[wrapper.end():].rstrip() if wrapper else command
+    if wrapper and body.endswith(wrapper.group(1)):
+        body = body[:-1].rstrip()
+    if re.search(r"&&|\|\||\|", body):
+        return False
+    body = body.strip()
+    last_command = re.split(r"[;\r\n]+", body)[-1].strip()
+    return bool(re.match(r"^" + pattern, last_command, re.I))
+
+
+def _unittest_success_output(output):
+    output = str(output or "")
+    ran = re.search(r"(?m)^Ran\s+(\d+)\s+tests?\s+in\s+[\d.]+s\s*$", output)
+    passed = re.search(r"(?m)^OK(?:\s+\([^\r\n]*\))?\s*$", output)
+    return bool(ran and int(ran.group(1)) > 0 and passed)
+
+
+def _latest_checks(items):
+    checks = {}
+    for item in items:
+        command = item.get("command", "")
+        if _unittest_invocation(command):
+            checks[command] = item
+    if not checks:
+        return False
+    outcomes = []
+    for item in checks.values():
+        code = item.get("exitCode")
+        if item.get("status") in ("failed", "interrupted") or (code is not None and code != 0):
+            outcomes.append(False)
+        elif code is None:
+            outcomes.append(None)
+        elif _unittest_success_output(item.get("aggregatedOutput", "")):
+            outcomes.append(True)
+        elif re.search(r"(?m)^FAILED\s*\(", str(item.get("aggregatedOutput") or "")):
+            outcomes.append(False)
+        else:
+            outcomes.append(None)
+    return False if False in outcomes else None if None in outcomes else True
+
+
+def _command_items(items, after=float("-inf"), before=float("inf")):
+    return [(when, item) for when, item in items if after <= when < before
+            and item.get("type") == "commandExecution"]
+
+
 def grade(events, records, meta, case):
     root, manager, worker = meta["root"], meta["manager"], meta["worker"]
     items = completed_items(events, root)
@@ -47,10 +98,9 @@ def grade(events, records, meta, case):
         checks["announcement_before_dispatch"] = any(when <= first and item["type"] == "agentMessage" and
             worker["model"] in item["text"] and re.search(r"\b" + re.escape(worker["effort"]) + r"\b", item["text"], re.I)
             for when, item in items) and bool(starts)
-        audits = [i for when, i in items if when >= last and i["type"] == "commandExecution" and i["status"] == "completed"]
-        checks["manager_runs_successful_checks"] = any(re.search(r"python(?:3)?\s+(?:-B\s+)?-m\s+unittest\b", i["command"])
-            and i.get("exitCode") == 0 and re.search(r"\bOK\b", i.get("aggregatedOutput", "")) for i in audits)
-        checks["manager_inspects_changes"] = any("git diff" in i["command"] and
+        audits = [i for _, i in _command_items(items, after=last)]
+        checks["manager_runs_successful_checks"] = _latest_checks(audits)
+        checks["manager_inspects_changes"] = any(i.get("status") == "completed" and "git diff" in i["command"] and
             "diff --git" in i.get("aggregatedOutput", "") for i in audits)
         checks["no_observed_status_polling"] = not any(i["type"] == "collabAgentToolCall" and
             i.get("tool") in ("list_agents", "status", "list") for _, i in items)
@@ -70,6 +120,15 @@ def grade(events, records, meta, case):
         else:
             windows.sort()
             checks["dependent_workers_sequenced"] = len(windows) == 2 and windows[0][1] <= windows[1][0]
+            if len(windows) == 2:
+                between = [i for _, i in _command_items(items, after=windows[0][1], before=windows[1][0])]
+                passed = _latest_checks(between)
+                inspected = any(i.get("status") == "completed" and "git diff" in i.get("command", "") and
+                                "diff --git" in i.get("aggregatedOutput", "") for i in between)
+                checks["dependent_manager_acceptance_between_workers"] = (
+                    False if passed is False or not inspected else None if passed is None else True)
+            else:
+                checks["dependent_manager_acceptance_between_workers"] = False
             modes = [c["payload"].get("collaboration_mode", {}).get("mode") for c in root_record["turn_contexts"]]
             checks["native_mode_transition"] = modes == ["plan", "default"]
     outcomes = [e["message"]["params"]["turn"]["status"] for e in events

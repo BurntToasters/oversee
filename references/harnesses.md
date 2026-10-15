@@ -1,6 +1,6 @@
 # Harness reference
 
-Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode v2.0.29 and Codex CLI 0.162.0-alpha.17.2 on Windows. Other harnesses remain documentation-checked. Smoke coverage is limited; it does not establish full compatibility. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
+Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode v2.0.29 through the local service API's `session.prompt` operation and Codex CLI 0.162.0-alpha.17.2 on Windows. OpenCode v1 and the OpenCode TUI slash parser were not tested. Other harnesses remain documentation-checked. Smoke coverage is limited; it does not establish full compatibility. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
 
 ## Common rules
 
@@ -15,7 +15,8 @@ Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode 
 | Harness | Invocation | Host controls / limits |
 |---|---|---|
 | Claude Code | `/oversee` | Portable guard applies. User can optionally set `skillOverrides.oversee` to `user-invocable-only` in their settings. |
-| OpenCode | `/oversee` | Quoted metadata switches `opencode/slash: "true"` and `opencode/autoinvoke: "false"` expose manual invocation and suppress automatic selection. |
+| OpenCode v2 | `@oversee` in the prompt, or the native skill tool when exposed | Current v2 docs describe skill loading by ID; TUI slash commands are a separate feature. The v2 skill docs do not document `opencode/slash`. |
+| OpenCode v1 | `/oversee` when the host honors `metadata.opencode/slash: "true"` | This slash switch is documented by the legacy v1 skills page; do not assume it applies to v2. |
 | Codex | `$oversee` or `/skills` | Host enforcement uses `policy.allow_implicit_invocation: false` in `agents/openai.yaml`; that optional sidecar is not installed. |
 | Copilot CLI | `/oversee` | Retain execution guard even if host loads relevant skills automatically. |
 | Cursor | `/oversee` | Retain execution guard; discussing the skill is not invoking it. |
@@ -24,7 +25,7 @@ Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode 
 
 Installation paths are discovery candidates, not proof of full behavior. Duplicate discovery from `.agents` and `.claude` needs a local smoke test. Installers never change host settings.
 
-Sources: [Claude skills](https://code.claude.com/docs/en/skills), [OpenCode v1 skills](https://opencode.ai/docs/skills/), [OpenCode v2 skills](https://opencode.ai/v2/docs/skills/), [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Copilot skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills), [Cursor skills](https://cursor.com/docs/skills), [Antigravity skills](https://antigravity.google/docs/skills/), [Google codelab](https://codelabs.developers.google.com/getting-started-with-antigravity-skills).
+Sources: [Claude skills](https://code.claude.com/docs/en/skills), [OpenCode v1 skills](https://opencode.ai/docs/skills/), [OpenCode v2 skills](https://opencode.ai/v2/docs/skills/), [OpenCode v1 commands](https://opencode.ai/docs/commands/), [OpenCode v2 commands](https://opencode.ai/v2/docs/commands/), [OpenCode v2 CLI](https://opencode.ai/v2/docs/cli/), [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Copilot skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills), [Cursor skills](https://cursor.com/docs/skills), [Antigravity skills](https://antigravity.google/docs/skills/), [Google codelab](https://codelabs.developers.google.com/getting-started-with-antigravity-skills).
 
 ## OpenCode v2
 
@@ -34,19 +35,22 @@ Sources: [Claude skills](https://code.claude.com/docs/en/skills), [OpenCode v1 s
 - Definitions: `.opencode/agents/*.md` or `~/.config/opencode/agents/*.md`. JSON uses `agents`, `system`, `permissions`, unlike v1.
 - Foreground calls block; background calls notify on completion. Batch independent calls and wait for all; resume returned `sessionID`.
 - Plan: native `plan` restricts project edits; `build` implements. Use an exposed native transition or ask user to switch to Build. In a controlled evaluation, an explicit later `run --agent build --session <id>` selects implementation; verify host mode changed.
+- Current v2 skills docs describe loading by `@skill-id` or the native `skill` tool. They do not document the legacy `opencode/slash` switch; TUI custom commands are configured separately under `.opencode/commands/`.
+- The live v2.0.29 smoke sent `/oversee` as ordinary text through the local service API's `session.prompt` operation and explicitly attached the project-local skill by ID. It retained native session evidence but did not exercise the TUI parser or prove that typing `/oversee` is recognized there. Test the installed TUI directly before claiming slash-command support.
 - Observed v2.0.29: `run --model <selector> --agent <id> --session <id> --format json`; `api` and `session` commands, no v1 `export`. Collect parent/child evidence after completion, never through status polling.
 - Child profiles have their own permissions. Preserve restrictions explicitly for independent headless sessions. `--auto` auto-approves permissions not explicitly denied; do not add it as a fallback convenience.
 
-Sources: [v2 agents](https://opencode.ai/v2/docs/agents/), [v2 tools](https://opencode.ai/v2/docs/tools/), [v2 models](https://opencode.ai/v2/docs/models/), [v2 permissions](https://opencode.ai/v2/docs/permissions/). CLI flags also checked against local v2.0.29 help.
+Sources: [v2 agents](https://opencode.ai/v2/docs/agents/), [v2 tools](https://opencode.ai/v2/docs/tools/), [v2 models](https://opencode.ai/v2/docs/models/), [v2 permissions](https://opencode.ai/v2/docs/permissions/), [v2 skills](https://opencode.ai/v2/docs/skills/), [v2 commands](https://opencode.ai/v2/docs/commands/), [v2 CLI](https://opencode.ai/v2/docs/cli/).
 
 ## OpenCode v1
 
 - Legacy docs describe General, Explore, Scout, and Task delegation. Inspect the actual schema; do not apply v2 `subagent` arguments.
+- The legacy v1 skills docs describe `metadata.opencode/slash: "true"` for exposing a skill as a TUI `/name` command. This is a version-specific control; current v2 skills docs instead describe `@skill-id` and native tool loading.
 - JSON uses `agent`, `prompt`, `permission`; profiles live in `.opencode/agents/` or `~/.config/opencode/agents/`.
 - Select model/effort through supported native parameters or existing matching profiles; do not promise v2 overrides on v1.
 - Plan/Build selection is documented. A programmatic transition for this skill is unverified; use the visible control or ask user to switch.
 
-Sources: [v1 agents](https://opencode.ai/docs/agents/), [v1 CLI](https://opencode.ai/docs/cli/).
+Sources: [v1 agents](https://opencode.ai/docs/agents/), [v1 CLI](https://opencode.ai/docs/cli/), [v1 skills](https://opencode.ai/docs/skills/), [v1 commands](https://opencode.ai/docs/commands/).
 
 ## Claude Code
 

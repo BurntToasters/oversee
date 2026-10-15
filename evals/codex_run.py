@@ -69,12 +69,16 @@ class Codex:
                        "message": "Interactive request unsupported by this test driver; no permission granted."}})
         return message
 
-    def request(self, method, params):
+    def request(self, method, params, *, timeout=60):
         self.sequence += 1
         identifier = self.sequence
+        deadline = time.monotonic() + timeout
         self.send({"id": identifier, "method": method, "params": params})
         while True:
-            message = self.receive(timeout=60)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("Codex protocol request timed out.")
+            message = self.receive(timeout=remaining)
             if message.get("id") == identifier and "method" not in message:
                 if "error" in message:
                     raise Blocked(f"Codex {method}: {message['error'].get('message', 'Request rejected')}")
@@ -95,17 +99,49 @@ class Codex:
 
     def close(self):
         errors = []
-        for thread, turn in list(self.active.items()):
+        attempted = set()
+        deadline = time.monotonic() + 8
+        while True:
+            pending = [(thread, turn) for thread, turn in self.active.items()
+                       if (thread, turn) not in attempted]
+            if not pending:
+                break
+            if time.monotonic() >= deadline:
+                errors.append("Cancellation deadline reached with active Codex turns remaining.")
+                break
+            thread, turn = pending[0]
+            attempted.add((thread, turn))
             try:
-                self.request("turn/interrupt", {"threadId": thread, "turnId": turn})
-            except (Blocked, OSError, EOFError, TimeoutError) as error:
-                errors.append(str(error))
-        self.process.stdin.close()
+                self.request("turn/interrupt", {"threadId": thread, "turnId": turn},
+                             timeout=min(3, max(0.01, deadline - time.monotonic())))
+            except Exception as error:
+                errors.append(f"Interrupt {thread}: {error}")
         try:
-            self.process.wait(timeout=5)
+            self.process.stdin.close()
+        except Exception as error:
+            errors.append(f"Close stdin: {error}")
+        try:
+            self.process.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            self.process.terminate()
-            self.process.wait(timeout=5)
+            try:
+                self.process.terminate()
+            except Exception as error:
+                errors.append(f"Terminate process: {error}")
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    self.process.kill()
+                except Exception as error:
+                    errors.append(f"Kill process: {error}")
+                try:
+                    self.process.wait(timeout=2)
+                except Exception as error:
+                    errors.append(f"Wait after kill: {error}")
+            except Exception as error:
+                errors.append(f"Wait after terminate: {error}")
+        except Exception as error:
+            errors.append(f"Wait process: {error}")
         return errors
 
 
@@ -206,12 +242,37 @@ def run_case(executable, case, output, manager, worker):
         write_json(output / "result.json", report)
         return report
     finally:
-        errors = api.close()
-        write_json(output / "native.json", raw)
-        write_json(output / "events.json", api.events)
-        write_json(output / "after.json", snapshot(project))
-        if errors:
-            write_json(output / "cleanup-errors.json", errors)
+        original_error = sys.exc_info()[1]
+        cleanup_errors, persistence_errors = [], []
+        try:
+            cleanup_errors.extend(api.close() or [])
+        except BaseException as error:
+            cleanup_errors.append(f"Close Codex API: {error}")
+        evidence = (("native.json", lambda: raw), ("events.json", lambda: api.events),
+                    ("after.json", lambda: snapshot(project)))
+        for name, get_value in evidence:
+            try:
+                write_json(output / name, get_value())
+            except BaseException as error:
+                persistence_errors.append(f"Persist {name}: {error}")
+        issues = [*cleanup_errors, *persistence_errors]
+        if issues:
+            try:
+                write_json(output / "cleanup-errors.json", issues)
+            except BaseException as error:
+                persistence_errors.append(f"Persist cleanup-errors.json: {error}")
+        if persistence_errors and original_error is None:
+            result_path = output / "result.json"
+            try:
+                result_path.unlink()
+            except FileNotFoundError:
+                pass
+            except BaseException:
+                try:
+                    write_json(result_path, {"status": "evidence_incomplete", "errors": persistence_errors})
+                except BaseException:
+                    pass
+            raise OSError("Evidence persistence failed: " + "; ".join(persistence_errors))
 
 
 def main(argv=None):

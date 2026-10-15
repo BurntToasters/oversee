@@ -12,18 +12,32 @@ try {
     Invoke-WebRequest -Uri $tarball -OutFile $archive
 
     $extract = Join-Path $temp "src"
-    New-Item -ItemType Directory -Path $extract -Force | Out-Null
-    $tar = Get-Command tar -ErrorAction SilentlyContinue
+    # Prefer Windows' bsdtar; PATH may hold GNU tar, which misreads C:\ paths.
+    $tar = Get-Command -Name (Join-Path $env:SystemRoot 'System32\tar.exe') -ErrorAction SilentlyContinue
+    if (-not $tar) { $tar = Get-Command -Name tar -ErrorAction SilentlyContinue }
+    $extracted = $false
     if ($tar) {
-        & tar -xzf $archive -C $extract --strip-components=1
-        if ($LASTEXITCODE -ne 0) {
-            throw "Archive extraction failed with code $LASTEXITCODE."
+        New-Item -ItemType Directory -Path $extract -Force | Out-Null
+        & $tar -xzf $archive -C $extract --strip-components=1
+        if ($LASTEXITCODE -eq 0) {
+            $extracted = $true
+        }
+        else {
+            Write-Warning "tar exited with code $LASTEXITCODE. Trying the zip archive."
         }
     }
-    else {
+    if (-not $extracted) {
+        # Clear partial tar output so the zip extracts cleanly.
+        Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $extract -Force | Out-Null
         $zip = Join-Path $temp "oversee.zip"
-        Invoke-WebRequest -Uri "$repo/archive/refs/heads/$branch.zip" -OutFile $zip
-        Expand-Archive -Path $zip -DestinationPath $extract -Force
+        try {
+            Invoke-WebRequest -Uri "$repo/archive/refs/heads/$branch.zip" -OutFile $zip
+            Expand-Archive -Path $zip -DestinationPath $extract -Force
+        }
+        catch {
+            throw "Archive extraction failed: tar and the zip fallback both failed. $($_.Exception.Message)"
+        }
         $inner = Get-ChildItem -Path $extract -Directory | Select-Object -First 1
         if ($inner) {
             $extract = $inner.FullName

@@ -71,6 +71,30 @@ class Installers(unittest.TestCase):
     def test_windows_lifecycle(self):
         self.lifecycle("windows")
 
+    def test_windows_percent_profile_component_preserves_sibling(self):
+        self.profile = self.root / "profile-%AUDIT_COMPONENT%"
+        self.profile.mkdir()
+        self.env["USERPROFILE"] = str(self.profile)
+        self.env["AUDIT_COMPONENT"] = "expanded"
+        self.targets = [self.profile / p for p in TARGETS]
+        sibling = self.root / "profile-expanded"
+        sibling_target = sibling / TARGETS[0]
+        sibling_target.mkdir(parents=True)
+        marker = sibling_target / "user-data.txt"
+        marker.write_text("keep this sibling profile")
+
+        installed = self.run_script("windows", "install")
+        intended_payload_installed = all((t / "SKILL.md").exists() for t in self.targets)
+        sibling_payload_installed = (sibling_target / "SKILL.md").exists()
+        removed = self.run_script("windows", "uninstall")
+
+        self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
+        self.assertTrue(intended_payload_installed)
+        self.assertFalse(sibling_payload_installed)
+        self.assertEqual(removed.returncode, 0, removed.stdout + removed.stderr)
+        self.assertTrue(all(not t.exists() for t in self.targets))
+        self.assertEqual(marker.read_text(), "keep this sibling profile")
+
     def test_bash_lifecycle(self):
         self.lifecycle("bash")
 
@@ -99,6 +123,57 @@ class Installers(unittest.TestCase):
 
     def test_windows_replacement_failure_restores_payload(self):
         self.rollback("windows")
+
+    def inject_windows_move_failures(self, fail_restore=False):
+        path = self.source / "install.bat"
+        data = path.read_bytes()
+        publish = (b'move "%STAGE%\\references" "%DEST%\\references" >nul\r\n')
+        publish_fault = b'if defined AUDIT_FAIL_NEW_REFS (call :fail_move) else (move "%STAGE%\\references" "%DEST%\\references" >nul)\r\n'
+        self.assertEqual(data.count(publish), 1)
+        data = data.replace(publish, publish_fault)
+        if fail_restore:
+            restore = b'    move "%STAGE%\\old-references" "%DEST%\\references" >nul\r\n'
+            restore_fault = b'    if defined AUDIT_FAIL_RESTORE_REFS (call :fail_move) else (move "%STAGE%\\old-references" "%DEST%\\references" >nul)\r\n'
+            self.assertEqual(data.count(restore), 1)
+            data = data.replace(restore, restore_fault)
+        self.assertIn(b'\r\n:recovery\r\n', data)
+        data = data.replace(b'\r\n:recovery\r\n', b'\r\n:fail_move\r\nexit /b 1\r\n\r\n:recovery\r\n', 1)
+        path.write_bytes(data)
+        self.env["AUDIT_FAIL_NEW_REFS"] = "1"
+        if fail_restore:
+            self.env["AUDIT_FAIL_RESTORE_REFS"] = "1"
+
+    def test_windows_post_publication_failure_restores_payload(self):
+        target = self.targets[0]
+        (target / "references").mkdir(parents=True)
+        (target / "SKILL.md").write_text("old skill")
+        (target / "references/old.md").write_text("old refs")
+        self.inject_windows_move_failures()
+
+        result = self.run_script("windows", "install")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not install", result.stdout)
+        self.assertEqual((target / "SKILL.md").read_text(), "old skill")
+        self.assertEqual((target / "references/old.md").read_text(), "old refs")
+        self.assertEqual(list(target.parent.glob("*stage*")), [])
+
+    def test_windows_recovery_failure_retains_and_reports_backup(self):
+        target = self.targets[0]
+        (target / "references").mkdir(parents=True)
+        (target / "SKILL.md").write_text("old skill")
+        (target / "references/old.md").write_text("old refs")
+        self.inject_windows_move_failures(fail_restore=True)
+
+        result = self.run_script("windows", "install")
+        backups = list(target.parent.glob("*stage*"))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((target / "SKILL.md").read_text(), "old skill")
+        self.assertFalse((target / "references").exists())
+        self.assertEqual(len(backups), 1)
+        self.assertEqual((backups[0] / "old-references/old.md").read_text(), "old refs")
+        self.assertIn(str(backups[0]), result.stdout)
 
     def test_bash_replacement_failure_restores_payload(self):
         self.rollback("bash")
@@ -185,10 +260,17 @@ function Invoke-WebRequest {
     } else { Copy-Item -LiteralPath $env:AUDIT_ARCHIVE -Destination $OutFile }
 }
 if ($env:AUDIT_MODE -eq 'tar-failure') {
-    function tar {
+    function audit-tar {
         $folder = $args[[Array]::IndexOf($args, '-C') + 1]
-        Copy-Item -Path (Join-Path $env:AUDIT_SOURCE '*') -Destination $folder -Recurse
+        Copy-Item -LiteralPath (Join-Path $env:AUDIT_SOURCE 'SKILL.md') -Destination $folder
+        New-Item -ItemType Directory -Path (Join-Path $folder 'stale-partial') | Out-Null
+        Set-Content -LiteralPath (Join-Path $folder 'stale-partial/partial.txt') -Value 'partial'
         $global:LASTEXITCODE = 7
+    }
+    function Get-Command {
+        param([string[]]$Name, $ErrorAction)
+        if ($Name -like '*tar*') { return Microsoft.PowerShell.Core\Get-Command audit-tar }
+        Microsoft.PowerShell.Core\Get-Command @PSBoundParameters
     }
 }
 if ($env:AUDIT_MODE -eq 'zip') {
@@ -206,11 +288,13 @@ if ($env:AUDIT_MODE -eq 'zip') {
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(all((t / "references/harnesses.md").exists() for t in self.targets))
 
-    def test_powershell_remote_tar_failure_with_partial_payload(self):
+    def test_powershell_remote_tar_failure_falls_back_to_zip(self):
         result = self.remote_powershell("tar-failure")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Archive extraction failed", result.stderr)
-        self.assertTrue(all(not t.exists() for t in self.targets))
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("Trying the zip archive", output)
+        self.assertTrue(all((t / "references/harnesses.md").exists() for t in self.targets))
+        self.assertEqual([p for t in self.targets for p in t.rglob("stale-partial")], [])
 
     def test_powershell_remote_download_failure(self):
         self.assertNotEqual(self.remote_powershell("download-failure").returncode, 0)
@@ -219,9 +303,45 @@ if ($env:AUDIT_MODE -eq 'zip') {
         result = self.remote_powershell("zip")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    @unittest.skipUnless(POWERSHELL and os.name == "nt", "Windows PowerShell required")
+    def test_powershell_remote_shadowed_tar_still_installs(self):
+        shim_dir = self.root / "shadow-bin"
+        shim_dir.mkdir()
+        (shim_dir / "tar.cmd").write_text("@exit /b 2\r\n", encoding="utf-8")
+        path_key = next((k for k in self.env if k.upper() == "PATH"), "PATH")
+        self.env[path_key] = str(shim_dir) + os.pathsep + self.env.get(path_key, "")
+        self.assertEqual(subprocess.run(["cmd.exe", "/d", "/c", "tar"], env=self.env, capture_output=True).returncode, 2)
+        result = self.remote_powershell("success")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(all((t / "references/harnesses.md").exists() for t in self.targets))
+
+    @unittest.skipUnless(POWERSHELL and os.name == "nt", "Windows PowerShell required")
+    def test_powershell_remote_tar_and_zip_failure_exits_nonzero(self):
+        corrupt = self.root / "corrupt.tar.gz"
+        corrupt.write_text("not an archive", encoding="utf-8")
+        self.env.update(AUDIT_ARCHIVE=str(corrupt), AUDIT_SOURCE=str(self.source))
+        script = self.root / "remote-both-fail.ps1"
+        script.write_text("""
+$ErrorActionPreference = 'Stop'
+function Invoke-WebRequest {
+    param($Uri, $OutFile)
+    if ($Uri.EndsWith('.zip')) { throw 'injected zip failure' }
+    Copy-Item -LiteralPath $env:AUDIT_ARCHIVE -Destination $OutFile
+}
+& (Join-Path $env:AUDIT_SOURCE 'remote-install.ps1')
+""", encoding="utf-8")
+        result = subprocess.run([POWERSHELL, "-NoProfile", "-File", str(script)], env=self.env,
+                                capture_output=True, input="\n", text=True, timeout=30)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("both failed", result.stdout + result.stderr)
+        self.assertTrue(all(not t.exists() for t in self.targets))
+        self.assertFalse(any(self.downloads.glob("oversee-*")))
+
     def test_line_endings(self):
         for path in ROOT.glob("*.bat"):
             data = path.read_bytes()
-            self.assertNotIn(b"\n", data.replace(b"\r\n", b""), path.name)
+            bare_newlines = data.replace(b"\r\n", b"")
+            self.assertNotIn(b"\n", bare_newlines, path.name)
+            self.assertNotIn(b"\r", bare_newlines, path.name)
         for path in ROOT.glob("*.sh"):
             self.assertNotIn(b"\r", path.read_bytes(), path.name)

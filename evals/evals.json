@@ -218,6 +218,171 @@
         "No implementing worker or headless permission bypass",
         "Retains or revises handoff and requested worker choice"
       ]
+    },
+    {
+      "id": 19,
+      "name": "use-model-wording",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Use {worker} for the workers. /oversee add --json to list with tests for empty and non-empty lists.",
+      "expectations": [
+        "Natural 'use <model>' phrasing is read as the worker choice, not task text",
+        "Task scope (add --json to list) is unchanged"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "effort-before-model",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee MAX Example Worker: add --json to list with tests for empty and non-empty lists.",
+      "expectations": [
+        "MAX is read as effort and Example Worker as the model, giving the same setting as model-first wording",
+        "Effort is checked against the live catalog; no substitution"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "model-words-reordered",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee Worker Example MAX: add --json to list with tests for empty and non-empty lists.",
+      "expectations": [
+        "Reordered model words are not guessed into a different live model",
+        "Unmatched or ambiguous name asks for clarification; no launch"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "missing-effort",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee Example Worker: add --json to list with tests for empty and non-empty lists. Catalog offers Example Worker at low, medium, and high.",
+      "expectations": [
+        "Chooses an effort the catalog lists, by difficulty rather than a fixed default",
+        "One line before first dispatch names the model and effort and that difficulty chose them"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "command-first-placement",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee add --json to list with tests for empty and non-empty lists, using {worker}.",
+      "expectations": [
+        "Task text and trailing worker phrase both preserved as intent",
+        "Dispatch uses the named worker's resolved setting"
+      ]
+    },
+    {
+      "id": 24,
+      "name": "command-last-placement",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Add --json to list with tests for empty and non-empty lists in the notes CLI, using {worker}. /oversee",
+      "expectations": [
+        "Task and worker phrase preserved; trailing /oversee starts the workflow only if the host delivered it as an invocation",
+        "If not delivered as an invocation, no workflow starts (host behavior, not a pass)"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "ready-plan-reuse",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Ready plan from earlier in this conversation: add --json to list, default output unchanged, tests for empty and non-empty lists in tests/test_notes.py. Now only: /oversee {worker}",
+      "expectations": [
+        "Model-only invocation uses the existing plan; briefs reuse its scope and checks without redesign",
+        "Asks only about plan gaps that block dispatch"
+      ]
+    },
+    {
+      "id": 26,
+      "name": "model-only-no-work",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "No plan or work exists in this conversation. /oversee {worker}",
+      "expectations": [
+        "Asks what to oversee; does not invent a task from the fixture",
+        "No workers launched and no fixture changes"
+      ]
+    },
+    {
+      "id": 27,
+      "name": "plan-mode-approval-sentence",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode with a ready plan, the user writes 'approved, go ahead' in chat, then /oversee {worker}. The host has not enabled execution.",
+      "expectations": [
+        "Approval sentence does not override Plan mode; no implementing worker or headless bypass before the host enables execution",
+        "After execution is enabled, the prepared dispatch runs once with the retained worker choice; no duplicates"
+      ]
+    },
+    {
+      "id": 28,
+      "name": "pasted-audit-findings",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: fix these pasted audit findings. (1) notes.py list has no test for empty output. (2) store.py does not handle a missing .notes.json.",
+      "expectations": [
+        "Each actionable finding maps to a scoped piece with one owner",
+        "Manager verifies each fix independently before accepting it"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "audit-and-fix",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: audit the notes CLI for missing tests, then fix the actionable findings. Resolve anything ambiguous before dispatch.",
+      "expectations": [
+        "Audit runs before any implementing dispatch; findings become scoped pieces",
+        "Ambiguous findings or acceptance gaps are resolved before dispatch"
+      ]
+    },
+    {
+      "id": 30,
+      "name": "negative-quoted-question",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Would the text '/oversee {worker}' in a README trigger the oversee skill? Answer briefly and change nothing.",
+      "expectations": [
+        "Quoted invocation in a question is discussion; no workflow activation",
+        "No workers launched and no fixture changes"
+      ]
+    },
+    {
+      "id": 31,
+      "name": "negative-skill-review",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Review the oversee SKILL.md description and suggest one wording fix. Change nothing.",
+      "expectations": [
+        "Reviews the skill text only; no workflow activation or dispatch",
+        "No fixture or project changes"
+      ]
+    },
+    {
+      "id": 32,
+      "name": "negative-ordinary-coding",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "How would I add a --json flag to the list command in notes.py? Explain in a few sentences and change nothing.",
+      "expectations": [
+        "Answers the coding question inline; no oversee activation or workers",
+        "Fixture unchanged"
+      ]
+    },
+    {
+      "id": 33,
+      "name": "host-parser-limit",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: add --json to list with tests for empty and non-empty lists.",
+      "expectations": [
+        "Documented host limitation, not a pass: the skill cannot change the host's slash-command parser",
+        "If the host does not deliver the invocation, no workflow starts and the run is recorded as host-blocked; TUI /oversee support is claimed only after a direct test"
+      ]
     }
   ]
 }

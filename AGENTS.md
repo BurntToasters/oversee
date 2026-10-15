@@ -12,7 +12,7 @@ The README premise: a larger model oversees other subagents without micromanagin
 
 The intended setup is a higher-tier model as manager (for example Claude Opus 5.5 or GPT-6.1 Sol) and cheaper workers as subagents (for example Claude Haiku 5.5 or GPT-6 Luna). The manager plans and audits. The workers implement. The main goal is fewer tokens, so the manager never polls workers.
 
-The skill must work in Claude Code, OpenCode, Codex, GitHub Copilot, Cursor, and Antigravity.
+Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in these. GitHub Copilot and Antigravity are best-effort: keep install paths and harness notes, but do not block releases on them (see Decision 13).
 
 Owner: BurntToasters. License: MIT.
 
@@ -21,16 +21,16 @@ Owner: BurntToasters. License: MIT.
 | Item | State |
 |---|---|
 | Design | Mostly settled. See Decisions below |
-| `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Current regression suite covers Windows cmd/PowerShell and Git Bash. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
+| `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
 | `SKILL.md` | Explicit activation, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
-| `references/harnesses.md` | Official sources rechecked 2026-10-15; OpenCode v2.0.29 and Codex CLI 0.162.0-alpha.17.2 have live smoke evidence; other hosts not live-tested |
-| `evals/` | 18 scenarios, OpenCode/Codex native evidence and review tools, 72 offline tests including version tooling; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
+| `references/harnesses.md` | Official sources rechecked 2026-10-15; OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, and other hosts are not live-tested |
+| `evals/` | Scenario catalog (including invocation-wording scenarios 19-33, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
 | `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
 | `README.md` | Written with install, uninstall, compatibility, and usage instructions |
 
 ## Decisions
 
-Items 1 to 5 and 7 to 8 were agreed with the owner. Change them only with the owner.
+Items 1 to 5, 7 to 8, and 13 were agreed with the owner. Change them only with the owner.
 
 1. **Invocation.** `/oversee <task>` starts a run. `/oversee` alone oversees work already in progress in the conversation. If nothing is in progress, ask what to oversee.
 2. **Scope.** Coding first. Acceptance means tests, builds, or diffs that can be checked. Non-code work is out of scope for v1.
@@ -48,6 +48,7 @@ Items 1 to 5 and 7 to 8 were agreed with the owner. Change them only with the ow
 10. **Universal core.** `SKILL.md` must not depend on one harness's tool names or model IDs. Harness details go in `references/`.
 11. **Plan mode.** A ready conversation plan counts as existing work. Prepare briefs, retain the worker choice, and use native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers.
 12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
+13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot and Antigravity are best-effort: keep installing to their paths and keep their harness notes, but their live verification is optional and does not block a release.
 
 ## Invocation wording
 
@@ -72,7 +73,7 @@ Items 1 to 5 and 7 to 8 were agreed with the owner. Change them only with the ow
 
 - Frontmatter uses only Agent Skills spec fields: `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`. Spec: https://agentskills.io/specification
 - No Claude-only fields such as `disable-model-invocation`, `argument-hint`, `context`, `model`, `effort`, or `paths`. The claude.ai packaging step rejects unknown keys (Claude Code skills docs).
-- OpenCode-only switches go under `metadata` as quoted strings. `opencode/slash: "true"` exposes `/oversee` in OpenCode. `opencode/autoinvoke: "false"` keeps the skill out of the model's automatic picks. Other tools ignore these keys.
+- OpenCode-specific switches go under `metadata` as quoted strings. The legacy v1 docs describe `opencode/slash: "true"` for TUI slash commands; current v2 docs describe `@skill-id` and native skill loading, and do not document that switch. `opencode/autoinvoke: "false"` keeps the skill out of the model's automatic picks. Other tools ignore these keys.
 - `name` is `oversee`, matching the folder name. Use lowercase letters, digits, and single hyphens only.
 - `description` is 1 to 1024 characters. Lead with the `/oversee` trigger and the coding-only scope.
 - `SKILL.md` stays under 500 lines. Put detail in `references/`, one level deep.
@@ -108,7 +109,8 @@ Doc links are under Sources at the end.
 | Harness | How the user runs it |
 |---|---|
 | Claude Code | `/oversee` |
-| OpenCode | `/oversee` with `opencode/slash: "true"`. Otherwise the model loads it by name |
+| OpenCode v2 | Mention `@oversee` or use the native skill tool; TUI slash commands are configured separately |
+| OpenCode v1 | `/oversee` when the host honors `opencode/slash: "true"` |
 | Codex | `$oversee`, or pick it from `/skills`. Also matched by description |
 | Copilot CLI | `/oversee` in the prompt |
 | Cursor | `/oversee` in Agent chat |
@@ -177,8 +179,9 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - Evidence: `../oversee-workspace/reliability-pilot-go/`; corrected derived review: `../oversee-workspace/reliability-pilot-go-reviewed/`. Small-pilot native costs were higher with oversee ($0.029469 versus $0.006872); dependent baseline was incomplete. No savings claim is justified.
 - Codex smoke evidence: `../oversee-workspace/codex-smoke-1/`; recovered/graded evidence: `../oversee-workspace/codex-smoke-1-reviewed/`. Caller chose GPT-6.1 Sol medium with GPT-6 Luna max. Ordinary-question and parallel cases passed observed orchestration checks; dependent implementation passed behavior, exact settings, and native handoff, but failed silence. Original exporter missed current child-event shapes; derived review recovers them from retained native events without more model calls. Cost is unknown.
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
-- Wording flexibility is intended behavior, not comprehensive live coverage. Add eval variations for natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, and combined audit-and-fix requests. Include negative quoted examples and host parser limits. Do not claim exact wording passed without retained evidence.
-- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Other harnesses, duplicate global discovery, macOS, and WSL in the current revision still need live verification. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
+- Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence.
+- Installer fault injection covers failure while publishing `SKILL.md` or `references/` to one target and failure of the subsequent restore, for both `install.bat` and `install.sh`. These are deterministic offline tests; they found no installer defects.
+- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery, macOS, and WSL in the current revision. Copilot and Antigravity live checks are optional (Decision 13). On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
 - Default effort selection remains a relative difficulty heuristic limited to each model's supported variants. No cross-model strength ranking is claimed.
 
 ## Glossary
@@ -202,6 +205,8 @@ Checked 2026-10-15; source dates in retained evidence remain historical.
 - OpenCode agents: https://opencode.ai/docs/agents/
 - OpenCode rules: https://opencode.ai/docs/rules/
 - OpenCode v2 agents/tools/models/permissions/skills/API: https://opencode.ai/v2/docs/
+- OpenCode v2 skills and commands: https://opencode.ai/v2/docs/skills/ and https://opencode.ai/v2/docs/commands/
+- OpenCode v1 skills and commands: https://opencode.ai/docs/skills/ and https://opencode.ai/docs/commands/
 - Copilot model configuration: https://docs.github.com/en/copilot/reference/custom-agents-configuration
 - Cursor Plan mode: https://cursor.com/help/ai-features/plan-mode
 - Codex skills: https://developers.openai.com/codex/skills

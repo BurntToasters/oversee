@@ -2,7 +2,7 @@
 
 Version: `1.0.0` (preview).
 
-Release status: suitable for a preview with the documented limits. OpenCode and Codex have limited live smoke coverage. Stable readiness still needs other harnesses, controlled retry/cancellation/dirty-workspace cases, and result-only reporting compliance. Current macOS/WSL installer verification is also pending.
+Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
 An [Agent Skill](https://agentskills.io) for a manager model to oversee worker subagents without micromanaging them. You choose any model and effort supported by your current harness; names in examples are not defaults or an allowlist.
 
@@ -25,7 +25,11 @@ The portable payload is `SKILL.md` plus `references/`. The following are intende
 | Antigravity app | `~/.gemini/config/skills/oversee` |
 | Antigravity CLI | `~/.gemini/antigravity-cli/skills/oversee` |
 
+Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot and Antigravity are supported on a best-effort basis: the installers still place the skill where they read it, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`), not arbitrary models.
+
 Harness-specific subagent tools, model names, and effort flags live in [`references/harnesses.md`](references/harnesses.md).
+
+Invocation syntax depends on the host version. Current OpenCode v2 docs describe loading a skill with `@oversee` or its native skill tool, while TUI slash commands are configured separately. The live smoke sent `/oversee` as prompt text through the local service API and attached the skill explicitly; this does not prove the TUI parser exposes that command. See the versioned notes in the harness reference.
 
 ## Install
 
@@ -42,7 +46,7 @@ Or from a clone of this repo:
 ```bash
 git clone https://github.com/BurntToasters/oversee.git
 cd oversee
-./install.sh
+bash ./install.sh
 ```
 
 Re-run to update. Installers stage the complete payload, replace `SKILL.md` and the entire `references/` subtree, and restore the previous managed payload if replacement fails. Deleted upstream references disappear. Other files at the skill root and neighboring skills are preserved during updates. Recovery failures report the retained backup path. Each destination is a separate transaction; an earlier destination can succeed before a later one fails.
@@ -68,7 +72,7 @@ These one-liners execute downloaded code. Inspect the script before running it i
 ### Unix
 
 ```bash
-./uninstall.sh
+bash ./uninstall.sh
 ```
 
 Or, without a clone:
@@ -135,7 +139,7 @@ User/harness deadlines and cancellation stop further dispatch and request cancel
 - Focused reruns can select cases and one arm; they are marked unpaired. Regrading rejects retained projects that differ from their recorded final hashes.
 - Repo conventions and remaining verification gaps are in [`AGENTS.md`](AGENTS.md).
 
-The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code, Copilot, Cursor, and Antigravity remain documentation-checked until live-tested.
+The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code and Cursor remain documentation-checked until live-tested; Copilot and Antigravity are best-effort and documentation-checked only.
 
 The Go pilot and two focused follow-ups passed overseen coding checks, including Plan-to-Build handoff. They still emitted routine narration, so result-only compliance remains unproven. Measured results and retained failures are documented in [`evals/README.md`](evals/README.md).
 
