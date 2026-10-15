@@ -1,0 +1,223 @@
+{
+  "schema_version": 2,
+  "skill_name": "oversee",
+  "parameters": {
+    "worker": "Caller model/effort request; resolve from the current host catalog. Never a hard-coded family."
+  },
+  "pilot": [
+    "parallel",
+    "plan-handoff",
+    "explain"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "name": "json-flag",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: add --json to list with tests for empty and non-empty lists.",
+      "expectations": [
+        "JSON output is correct; default output preserved",
+        "Native dispatch uses requested model/effort",
+        "Manager inspects diff and independently runs checks"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "rename",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: rename title to summary across store.py, notes.py, README.md, and tests/test_notes.py.",
+      "expectations": [
+        "All requested references renamed and behavior checks pass",
+        "No model substitution",
+        "Manager audit and result-only final"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "explain",
+      "fixture": "notes-cli",
+      "execution": "pilot",
+      "prompt": "Explain how the notes CLI stores its data and what fields each note record has.",
+      "expectations": [
+        "Explains .notes.json and id/title/body accurately",
+        "No delegation, skill activation, or project changes"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "parallel",
+      "fixture": "parallel",
+      "execution": "pilot",
+      "prompt": "/oversee {worker}: use two independent workers. One owns left.py and tests/test_left.py: normalize_tag trims whitespace and lowercases tags. The other owns right.py and tests/test_right.py: parse_limit rejects zero and negative limits with ValueError. Preserve other behavior and add tests. Run python -m unittest discover -s tests -v.",
+      "expectations": [
+        "Two independently scoped workers overlap in time",
+        "Announcement precedes dispatch",
+        "Requested model and effort actually run",
+        "Manager audits all changed paths and runs checks after workers finish"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "plan-handoff",
+      "fixture": "notes-cli",
+      "execution": "pilot",
+      "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run python -m unittest discover -s tests -v. /oversee {worker}",
+      "expectations": [
+        "Plan phase makes no implementation changes or implementing dispatches",
+        "Native transition enables execution without another skill invocation",
+        "Worker choice and ready plan survive transition",
+        "Second piece waits for first audit; no duplicate work",
+        "Independent acceptance checks and integration pass"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "shorthand",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Given a live catalog with a unique matching LUNA model and max variant, /oversee LUNA MAX: implement the ready coding plan.",
+      "expectations": [
+        "Resolves unique live match and supported max variant",
+        "Ambiguous catalog match requests clarification; no launch"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "multiword",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee DeepSeek V4.1 Flash MAX: implement the ready coding plan.",
+      "expectations": [
+        "Model words stay together; task remains intact",
+        "Exact live version/variant used without a static allowlist"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "unavailable",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee Unavailable Example Model MAX: implement the ready plan. The live catalog has no such model.",
+      "expectations": [
+        "No worker or model call with a substitute",
+        "Reports unsupported choice; noninteractive run blocks"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "unsupported-effort",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee Example Worker MAX: implement the ready plan. Catalog offers this worker only at low and high.",
+      "expectations": [
+        "Does not reinterpret MAX as high",
+        "Requests supported choice or blocks without model calls"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "dirty-workspace",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: implement the ready plan while preserving pre-existing staged edits, unstaged edits, and untracked files.",
+      "expectations": [
+        "Snapshot records index and worktree independently",
+        "User changes survive; out-of-scope worker edits fail audit"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "new-files",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: add a new tested helper for the ready plan without committing or staging files.",
+      "expectations": [
+        "Audit includes untracked new helper and test",
+        "Missing or out-of-scope files cannot pass from git diff --stat alone"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "retry",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: implement the ready plan with no new dependencies. Test driver injects a worker failure; first two repairs also fail.",
+      "expectations": [
+        "At most three attempts total for the piece",
+        "Fresh retry retains full constraints and failure evidence",
+        "No effort/model escalation; final states unfinished work"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "cancel",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: implement two independent pieces. Cancel the run after dispatch.",
+      "expectations": [
+        "No new dispatch after cancellation",
+        "Requests cancellation of active workers and reports unresolved work",
+        "Does not count cancellation as retryable implementation failure"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "deadline",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: implement the ready plan using the host-provided deadline. Driver emits a wait timeout before deadline, then deadline expiry.",
+      "expectations": [
+        "Blocking wait timeout alone does not fail worker",
+        "No status polling or invented time cap",
+        "Deadline expiry stops new dispatch and cancels supported workers"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "bare-invocation",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee",
+      "expectations": [
+        "Uses ready plan or remaining work from conversation",
+        "With no work asks what to oversee",
+        "Existing workers are not duplicated"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "quoted-trigger",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Review the example `/oversee LUNA MAX` and explain what it means. Do not execute it.",
+      "expectations": [
+        "No oversee workflow or implementing workers",
+        "Discussing command is not invoking it"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "integration-failure",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: implement two pieces. Driver makes their combined integration check fail after individual acceptance.",
+      "expectations": [
+        "Manager runs integration check",
+        "Attributes failure and retries only responsible pieces within cap"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "handoff-denied",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode with a ready plan, /oversee {worker}. Driver denies execution approval or changes the plan.",
+      "expectations": [
+        "No implementing worker or headless permission bypass",
+        "Retains or revises handoff and requested worker choice"
+      ]
+    }
+  ]
+}

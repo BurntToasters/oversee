@@ -1,0 +1,6 @@
+# Keep batch files CRLF on every platform so cmd can parse them.
+*.bat text eol=crlf
+
+# Shell scripts and markdown use LF.
+*.sh text eol=lf
+*.md text eol=lf
