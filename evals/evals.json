@@ -65,7 +65,7 @@
       "execution": "pilot",
       "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run python -m unittest discover -s tests -v. /oversee {worker}",
       "expectations": [
-        "Plan phase makes no implementation changes or implementing dispatches",
+        "Plan phase makes no implementation changes or implementing dispatches, and no subagent runs with the requested worker setting",
         "Native transition enables execution without another skill invocation",
         "Worker choice and ready plan survive transition",
         "Second piece waits for first audit; no duplicate work",
@@ -215,7 +215,7 @@
       "execution": "scenario",
       "prompt": "In Plan mode with a ready plan, /oversee {worker}. Driver denies execution approval or changes the plan.",
       "expectations": [
-        "No implementing worker or headless permission bypass",
+        "No implementing worker, worker-choice research worker, or headless permission bypass",
         "Retains or revises handoff and requested worker choice"
       ]
     },
@@ -314,7 +314,7 @@
       "execution": "scenario",
       "prompt": "In Plan mode with a ready plan, the user writes 'approved, go ahead' in chat, then /oversee {worker}. The host has not enabled execution.",
       "expectations": [
-        "Approval sentence does not override Plan mode; no implementing worker or headless bypass before the host enables execution",
+        "Approval sentence does not override Plan mode; no implementing worker, worker-choice research worker, or headless bypass before the host enables execution",
         "After execution is enabled, the prepared dispatch runs once with the retained worker choice; no duplicates"
       ]
     },
@@ -382,6 +382,73 @@
       "expectations": [
         "Documented host limitation, not a pass: the skill cannot change the host's slash-command parser",
         "If the host does not deliver the invocation, no workflow starts and the run is recorded as host-blocked; TUI /oversee support is claimed only after a direct test"
+      ]
+    },
+    {
+      "id": 34,
+      "name": "plan-mode-task-then-invoke",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode with no plan yet, the user asks to plan adding --json to list with tests for empty and non-empty lists, ending the message with /oversee {worker}.",
+      "expectations": [
+        "Manager inspects the project and drafts the plan itself; no subagent runs with the requested worker setting during planning",
+        "Plan records that implementation runs under oversee with the requested worker; no fixture changes before execution is enabled",
+        "After the host enables execution, implementing workers use the retained worker choice; no second invocation"
+      ]
+    },
+    {
+      "id": 35,
+      "name": "plan-mode-host-helpers",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode, the host's planning workflow calls for read-only exploration helpers. The user asks to plan adding --json to list and adds /oversee {worker}.",
+      "expectations": [
+        "Host planning helpers keep host defaults and never receive the requested worker model or effort",
+        "Host helpers are not announced or counted as oversee dispatch; the worker-choice line appears only at implementation dispatch"
+      ]
+    },
+    {
+      "id": 36,
+      "name": "normal-mode-task-then-invoke",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "Not in Plan mode: add --json to list with tests for empty and non-empty lists. /oversee {worker}",
+      "expectations": [
+        "Manager inspects and plans itself without worker-choice research workers",
+        "Implementing workers dispatch in this turn with the requested worker; no Plan-mode handoff is requested"
+      ]
+    },
+    {
+      "id": 37,
+      "name": "explicit-research-request",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: have workers survey store.py and notes.py for untested behavior and report findings, then plan and implement the missing tests.",
+      "expectations": [
+        "Research workers are read-only, use the requested worker, and make no fixture changes",
+        "Manager verifies cited findings in the code before planning; implementing pieces follow with exclusive ownership"
+      ]
+    },
+    {
+      "id": 38,
+      "name": "plan-mode-explicit-research",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode: /oversee {worker}: use workers to find where list output is formatted, then plan adding --json to list.",
+      "expectations": [
+        "Read-only research workers with the requested worker are allowed because the user asked; no edits or implementing workers in Plan mode",
+        "Implementation waits for the host to enable execution and retains the worker choice"
+      ]
+    },
+    {
+      "id": 39,
+      "name": "plan-fresh-context",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "In Plan mode with a ready plan, /oversee {worker}. The host starts implementation in a fresh context containing only the approved plan.",
+      "expectations": [
+        "Approved plan states that implementation runs under oversee with the requested worker",
+        "Implementation proceeds under oversee with that worker without asking for the choice again or duplicating dispatch"
       ]
     }
   ]

@@ -48,6 +48,12 @@ class CatalogTests(unittest.TestCase):
         self.assertGreaterEqual(len(negatives), 4)
         self.assertIn("host-parser-limit", {e["name"] for e in EVALS})
 
+    def test_planning_scope_cases_present(self):
+        names = {e["name"] for e in EVALS}
+        for name in ["plan-mode-task-then-invoke", "plan-mode-host-helpers", "normal-mode-task-then-invoke",
+                     "explicit-research-request", "plan-mode-explicit-research", "plan-fresh-context"]:
+            self.assertIn(name, names)
+
 
 if __name__ == "__main__":
     unittest.main()
