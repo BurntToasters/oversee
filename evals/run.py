@@ -17,9 +17,9 @@ import urllib.parse
 import urllib.request
 
 if __package__:
-    from .evidence import final_text, grade, total_usage
+    from .evidence import final_text, grade, plan_phase_checks, total_usage
 else:
-    from evidence import final_text, grade, total_usage
+    from evidence import final_text, grade, plan_phase_checks, total_usage
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -289,11 +289,10 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
         if failure:
             raise Blocked(f"{failure['type']}: {failure['message']}")
         if case["name"] == "plan-handoff":
-            phase = {"unchanged": snapshot(project) == before,
-                     "no_implementation_workers": not any(t["info"].get("agent") != "explore" for t in raw[1:])}
+            phase = plan_phase_checks(raw, snapshot(project) == before, worker, manager)
             write_json(output / "plan-phase.json", {"checks": phase, "transcripts": raw})
-            if not all(phase.values()):
-                raise Blocked("Plan phase modified project files or started implementing workers.")
+            if any(v is False for v in phase.values()):
+                raise Blocked("Plan phase modified project files, started implementing workers, or used the worker choice.")
             api.operation("session.switchAgent", session, data={"agent": "build"}, timeout=execution_timeout(deadline))
             api.operation("session.prompt", session, data={"text": "Plan approved. The host is now in Build mode. Continue the prepared implementation with the retained worker choice; do not invoke the skill again."},
                           timeout=execution_timeout(deadline))

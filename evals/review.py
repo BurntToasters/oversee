@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .evidence import final_text, grade, total_usage
+from .evidence import final_text, grade, plan_phase_checks, total_usage
 from .run import ROOT, correctness, provider_blocker, snapshot, write_json
 
 
@@ -29,7 +29,14 @@ def review(source, output):
         raw = json.loads(path.read_text(encoding="utf-8"))
         case = case_dir.parent.name
         phase_path = case_dir / "plan-phase.json"
-        phase = json.loads(phase_path.read_text(encoding="utf-8"))["checks"] if phase_path.exists() else None
+        phase = None
+        if phase_path.exists():
+            retained = json.loads(phase_path.read_text(encoding="utf-8"))
+            phase = retained["checks"]
+            if "no_worker_choice_in_plan" not in phase and "transcripts" in retained:
+                # Older evidence predates this check; derive it from retained plan-phase transcripts.
+                phase = {**phase, "no_worker_choice_in_plan": plan_phase_checks(
+                    retained["transcripts"], phase.get("unchanged"), meta["worker"], meta["manager"])["no_worker_choice_in_plan"]}
         result = {"source": str(case_dir), "case": case, "with_skill": meta["with_skill"],
                   "orchestration": grade(raw, case, meta["with_skill"], meta["worker"], phase),
                   "usage": total_usage(raw), "provider_blocker": provider_blocker(raw)}

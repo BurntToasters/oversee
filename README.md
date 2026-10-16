@@ -1,6 +1,6 @@
 # oversee
 
-Version: `1.0.0` (preview).
+Version: `1.0.1` (preview).
 
 Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
@@ -114,13 +114,15 @@ In Codex, use `$oversee` or pick the skill from `/skills`.
 
 Model-only invocations such as `/oversee LUNA MAX` use the ready plan or remaining work in the conversation. The manager resolves names, versions, and variants from the host's live catalog. Ambiguous or unsupported choices need clarification; no model or effort is silently substituted. If no choice was given, it asks once; a noninteractive run selects an available worker by difficulty and announces the choice. This selection never overrides an explicitly named setting.
 
-You can invoke oversee while in Plan mode. It reuses the ready plan, prepares worker briefs, and retains the requested model through the host's approval/Build transition. Workers implement only after the host enables execution. Another skill invocation is unnecessary. If the host exposes no transition tool, oversee explains the required user action.
+The same invocation works in or out of Plan mode. In Plan mode, `/oversee Haiku 5.5 high` added to a task or plan means "implement this plan with Haiku 5.5 high workers": the manager researches and plans itself (the host's own planning helpers keep their defaults), prepares worker briefs, and records the worker choice in the plan through the host's approval/Build transition. Workers start only after the host enables execution. Another skill invocation is unnecessary. If the host exposes no transition tool, oversee explains the required user action. Outside Plan mode, the same invocation plans and dispatches workers now.
+
+Workers implement. They research or audit only when you ask for that explicitly, for example `/oversee Haiku 5.5 high: have workers map where list output is built, then add --json`; such workers are read-only.
 
 Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard; optional host-enforced invocation controls are documented in the harness reference and are not installed automatically.
 
 ## How it works
 
-1. **Plan.** Restate the task, define done with the project's real check commands, and split the work into pieces with clear file ownership.
+1. **Plan.** The manager inspects the project itself, restates the task, defines done with the project's real check commands, and splits the work into pieces with clear file ownership. Workers do not research for the plan unless you ask.
 2. **Brief.** Each worker gets a self-contained brief: goal, scope, constraints, definition of done, and the reporting format. Outcomes, not steps.
 3. **Dispatch and wait.** Independent workers go out together within host limits. Blocking waits and completion notices replace status polling. Necessary clarification, approval, and cancellation handling remain allowed.
 4. **Audit.** The manager compares staged, unstaged, and untracked changes against the initial snapshot, preserves existing user edits, runs acceptance checks itself, then runs integration checks.

@@ -92,6 +92,16 @@ def skill_loaded(transcript):
         "oversee" in str(t.get("state", {}).get("input", {})) for t in tools(transcript))
 
 
+def plan_phase_checks(transcripts, unchanged, worker, manager):
+    children = transcripts[1:]
+    uses = lambda t: t["info"].get("model") == worker or any(
+        m.get("model") == worker for m in t.get("messages", []) if m.get("type") == "assistant")
+    # Host planning helpers may explore, but the worker choice is reserved for implementation.
+    return {"unchanged": unchanged,
+            "no_implementation_workers": not any(t["info"].get("agent") != "explore" for t in children),
+            "no_worker_choice_in_plan": None if worker == manager else not any(uses(t) for t in children)}
+
+
 def grade(transcripts, case, with_skill, worker, phase=None):
     if not transcripts:
         return {"verified": False, "checks": {"native_transcript": None}}
@@ -184,6 +194,7 @@ def grade(transcripts, case, with_skill, worker, phase=None):
         if case == "plan-handoff":
             checks["plan_phase_unchanged"] = (phase or {}).get("unchanged")
             checks["no_implementation_in_plan"] = (phase or {}).get("no_implementation_workers")
+            checks["no_worker_choice_in_plan"] = (phase or {}).get("no_worker_choice_in_plan")
             checks["native_mode_transition"] = any(m.get("type") == "agent-switched" and
                                                       m.get("agent") == "build" for m in root["messages"])
             windows = sorted((t["info"]["time"]["created"], t["info"]["time"].get("idle")) for t in worker_calls)

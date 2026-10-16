@@ -45,6 +45,8 @@ The `scenario` entries in `evals.json` already cover these behaviors; use their 
 
 Entries 19-33 are invocation-wording scenarios (natural `use <model>` phrasing, reordered or missing effort, command placement, model-only and ready-plan invocations, pasted or combined audit findings, negative quoted/review/coding prompts, and the host parser limit). They are catalog-only `scenario` specifications, checked for structure by `tests/test_catalog.py`; none has been live-verified.
 
+Entries 34-39 cover planning scope: the worker choice names who implements, not who plans. They specify Plan-mode and normal-mode invocations added to a task, host planning helpers that must keep host defaults, explicitly requested read-only research (in and out of Plan mode), and a plan that survives a fresh-context implementation. They are also catalog-only. The OpenCode recorder now fails a plan phase in which any subagent runs with the requested worker setting; when manager and worker settings match, that check is unknown. Regrading older evidence derives this check from retained plan-phase transcripts.
+
 The dependent manager-acceptance grading and Codex distinct-check/cleanup regressions are offline tooling checks against retained or synthetic evidence. They verify evaluator behavior and evidence persistence; they add no live proof that an agent honors dependency gates or cleans up its work.
 
 | Existing case | Controlled procedure | Pass evidence |

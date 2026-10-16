@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from evals.evidence import final_text, grade, skill_loaded, tools, total_usage
+from evals.evidence import final_text, grade, plan_phase_checks, skill_loaded, tools, total_usage
 from evals.review import review
 from evals.run import Blocked, OpenCode, main, provider_blocker, resolve, retain_interrupted, run_case, snapshot
 
@@ -102,6 +102,22 @@ class EvidenceTests(unittest.TestCase):
                        {"unchanged": False, "no_implementation_workers": False})
         self.assertFalse(result["verified"])
         self.assertFalse(result["checks"]["plan_phase_unchanged"])
+
+    def test_plan_phase_rejects_worker_choice_for_research(self):
+        manager = {"providerID": "example", "id": "manager-v5", "variant": "high"}
+        host_helper = transcript("helper", "root", model=manager)
+        host_helper["info"]["agent"] = "explore"
+        research = transcript("research", "root")
+        research["info"]["agent"] = "explore"
+        clean = plan_phase_checks([transcript(model=manager), host_helper], True, WORKER, manager)
+        self.assertTrue(clean["no_implementation_workers"])
+        self.assertTrue(clean["no_worker_choice_in_plan"])
+        checks = plan_phase_checks([transcript(model=manager), research], True, WORKER, manager)
+        self.assertTrue(checks["no_implementation_workers"])
+        self.assertFalse(checks["no_worker_choice_in_plan"])
+        self.assertIsNone(plan_phase_checks([transcript(), research], True, WORKER, WORKER)["no_worker_choice_in_plan"])
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        self.assertFalse(grade([root, child], "plan-handoff", True, WORKER, checks)["verified"])
 
     def test_parallel_overlap_requires_real_timestamps(self):
         root = transcript()
