@@ -88,7 +88,7 @@ install_to() {
   echo "Installed/updated: ${dest}"
 }
 
-for relative in .agents/skills .claude/skills .gemini/config/skills .gemini/antigravity-cli/skills; do
+for relative in .agents/skills .claude/skills .cline/skills .gemini/config/skills .gemini/antigravity-cli/skills .kiro/skills; do
   if ! install_to "${profile_root}/${relative}/oversee"; then
     echo "Error: could not install to ${dest}" >&2
     exit 1

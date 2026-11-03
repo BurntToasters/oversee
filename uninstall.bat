@@ -12,9 +12,13 @@ set "TARGET=%USERPROFILE%\.agents\skills\oversee"
 call :check_self
 set "TARGET=%USERPROFILE%\.claude\skills\oversee"
 call :check_self
+set "TARGET=%USERPROFILE%\.cline\skills\oversee"
+call :check_self
 set "TARGET=%USERPROFILE%\.gemini\config\skills\oversee"
 call :check_self
 set "TARGET=%USERPROFILE%\.gemini\antigravity-cli\skills\oversee"
+call :check_self
+set "TARGET=%USERPROFILE%\.kiro\skills\oversee"
 call :check_self
 if "%SELF%"=="1" goto :self
 
@@ -22,9 +26,13 @@ set "TARGET=%USERPROFILE%\.agents\skills\oversee"
 call :remove_from
 set "TARGET=%USERPROFILE%\.claude\skills\oversee"
 call :remove_from
+set "TARGET=%USERPROFILE%\.cline\skills\oversee"
+call :remove_from
 set "TARGET=%USERPROFILE%\.gemini\config\skills\oversee"
 call :remove_from
 set "TARGET=%USERPROFILE%\.gemini\antigravity-cli\skills\oversee"
+call :remove_from
+set "TARGET=%USERPROFILE%\.kiro\skills\oversee"
 call :remove_from
 
 if "%FAILED%"=="1" goto :fail

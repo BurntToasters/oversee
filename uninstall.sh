@@ -9,8 +9,10 @@ home="${HOME:?HOME is not set}"
 dest_dirs=(
   "${home}/.agents/skills/${skill_name}"
   "${home}/.claude/skills/${skill_name}"
+  "${home}/.cline/skills/${skill_name}"
   "${home}/.gemini/config/skills/${skill_name}"
   "${home}/.gemini/antigravity-cli/skills/${skill_name}"
+  "${home}/.kiro/skills/${skill_name}"
 )
 
 for dest_dir in "${dest_dirs[@]}"; do

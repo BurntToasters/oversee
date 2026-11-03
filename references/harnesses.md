@@ -1,6 +1,6 @@
 # Harness reference
 
-Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode v2.0.29 through the local service API's `session.prompt` operation and Codex CLI 0.162.0-alpha.17.2 on Windows. OpenCode v1 and the OpenCode TUI slash parser were not tested. Other harnesses remain documentation-checked. Smoke coverage is limited; it does not establish full compatibility. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
+Checked 2026-10-15 against the linked official docs; Kiro CLI, Cline, and Antigravity sections checked 2026-11-03. Live smoke tests: OpenCode v2.0.29 through the local service API's `session.prompt` operation and Codex CLI 0.162.0-alpha.17.2 on Windows. OpenCode v1 and the OpenCode TUI slash parser were not tested. Other harnesses remain documentation-checked. Smoke coverage is limited; it does not establish full compatibility. Read only the relevant section. Current tool schemas, supported model variants, and host mode take precedence over examples. Tool names overlap; do not identify a harness from one name.
 
 ## Common rules
 
@@ -16,6 +16,7 @@ Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode 
 | Harness | Invocation | Host controls / limits |
 |---|---|---|
 | Claude Code | `/oversee` | Portable guard applies. User can optionally set `skillOverrides.oversee` to `user-invocable-only` in their settings. |
+| Cline | `/oversee` | Skills also auto-activate by description. Explicit invocation is preferred; the portable guard still applies. |
 | OpenCode v2 | `@oversee` in the prompt, or the native skill tool when exposed | Current v2 docs describe skill loading by ID; TUI slash commands are a separate feature. The v2 skill docs do not document `opencode/slash`. |
 | OpenCode v1 | `/oversee` when the host honors `metadata.opencode/slash: "true"` | This slash switch is documented by the legacy v1 skills page; do not assume it applies to v2. |
 | Codex | `$oversee` or `/skills` | Host enforcement uses `policy.allow_implicit_invocation: false` in `agents/openai.yaml`; that optional sidecar is not installed. |
@@ -23,10 +24,14 @@ Checked 2026-10-15 against the linked official docs. Live smoke tests: OpenCode 
 | Cursor | `/oversee` | Retain execution guard; discussing the skill is not invoking it. |
 | Antigravity app | `/oversee` | Check the installed app/version's UI. |
 | Antigravity CLI | `/oversee` | Current official docs describe automatic conversion of skills to slash commands. Documentation-checked; not live-tested. |
+| Kiro CLI 2.x | `/oversee` from 2.1 | Skills are also matched automatically by description. Earlier 2.x versions load skills without the slash command. Explicit invocation is preferred; the portable guard still applies. |
+| Kiro CLI V3 | `/oversee` | Skills are also matched automatically by description. Explicit invocation is preferred; the portable guard still applies. |
 
 Installation paths are discovery candidates, not proof of full behavior. Duplicate discovery from `.agents` and `.claude` needs a local smoke test. Installers never change host settings.
 
-Sources: [Claude skills](https://code.claude.com/docs/en/skills), [OpenCode v1 skills](https://opencode.ai/docs/skills/), [OpenCode v2 skills](https://opencode.ai/v2/docs/skills/), [OpenCode v1 commands](https://opencode.ai/docs/commands/), [OpenCode v2 commands](https://opencode.ai/v2/docs/commands/), [OpenCode v2 CLI](https://opencode.ai/v2/docs/cli/), [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Copilot skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills), [Cursor skills](https://cursor.com/docs/skills), [Antigravity skills](https://antigravity.google/docs/skills/), [Google codelab](https://codelabs.developers.google.com/getting-started-with-antigravity-skills).
+The `~/.agents/skills` entry also covers Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Copilot, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI; do not add their native directories unless the host stops reading the cross-agent path or native priority becomes necessary.
+
+Sources: [Claude skills](https://code.claude.com/docs/en/skills), [Cline skills](https://docs.cline.bot/customization/skills), [OpenCode v1 skills](https://opencode.ai/docs/skills/), [OpenCode v2 skills](https://opencode.ai/v2/docs/skills/), [OpenCode v1 commands](https://opencode.ai/docs/commands/), [OpenCode v2 commands](https://opencode.ai/v2/docs/commands/), [OpenCode v2 CLI](https://opencode.ai/v2/docs/cli/), [Codex skills](https://learn.chatgpt.com/docs/build-skills), [Copilot skills](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills), [Cursor skills](https://cursor.com/docs/skills), [Antigravity skills](https://antigravity.google/docs/skills/), [Antigravity customization discovery](https://antigravity.google/docs/customization-discovery/), [Antigravity CLI](https://antigravity.google/docs/cli/reference/), [Google codelab](https://codelabs.developers.google.com/getting-started-with-antigravity-skills), [Kiro skills](https://kiro.dev/docs/skills/), [Kiro configuration](https://kiro.dev/docs/configuration/), [Warp skills](https://docs.warp.dev/agents/capabilities/skills), [Factory skills](https://docs.factory.ai/harness/skills), [Junie skills](https://junie.jetbrains.com/docs/agent-skills.html), [Qwen skills](https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/), [Gemini CLI skills](https://geminicli.com/docs/cli/skills/), [Amp skills](https://ampcode.com/docs/customize/skills), [Goose skills](https://goose-docs.ai/docs/guides/context-engineering/using-skills), [Pi skills](https://pi.dev/docs/latest/skills), [OpenHands skills](https://docs.openhands.dev/overview/skills), [Augment skills](https://docs.augmentcode.com/cli/skills), [Crush skills](https://github.com/charmbracelet/crush#agent-skills), [Devin CLI skills](https://docs.devin.ai/cli/extensibility/skills/overview), [Zed skills](https://zed.dev/docs/ai/skills), [Roo skills](https://docs.roocode.com/features/skills), [Kilo skills](https://kilo.ai/docs/customize/skills), [Windsurf skills](https://docs.windsurf.com/windsurf/cascade/skills).
 
 ## OpenCode v2
 
@@ -95,12 +100,36 @@ Sources: [subagents](https://cursor.com/docs/subagents), [Plan mode](https://cur
 
 ## Antigravity
 
-- Native `invoke_subagent` runs concurrent children and returns messages. Built-ins include `research`, `self`; browser has a dedicated invocation flow.
-- Profiles: `.agents/agents/`, `~/.gemini/config/agents/`. Documented `model` takes tiers: `inherit`, `flash`, `pro`. Converting arbitrary provider models to tiers needs user agreement.
-- Retain ready plan and request exposed native approval/implementation flow. Specific transition tool is unverified; ask user to enable execution if absent.
-- Official skill docs now distinguish app/IDE global `~/.gemini/config/skills/` from CLI global `~/.gemini/antigravity-cli/skills/`; both use project `.agents/skills/`. CLI automatically converts skills to slash commands. Both installer destinations remain appropriate. Local Antigravity app 2.23.1.0 is installed, but no `agy`/agent CLI was found on PATH; discovery and execution remain unverified live.
+- Skills: project `.agents/skills/` (default; `.agent/skills/` is the legacy name). Personal `~/.gemini/config/skills/` applies to the App, IDE, and CLI. The CLI also reads `~/.gemini/antigravity-cli/skills/` and `~/.gemini/skills/`, which take priority over the config folder and manifest excludes. The IDE also supports legacy `~/.gemini/antigravity/skills/`. The installer writes the common config path plus the CLI-specific path.
+- Native `invoke_subagent` spawns asynchronous background children; `define_subagent` creates transient ones. Built-ins are `research`, `browser`, and `self`. Children have isolated context, can inherit, branch into a worktree, or share workspace storage, and the parent can run several concurrently. Nesting is capped at 10 levels. Approval requests bubble up to the parent UI.
+- Custom agents: `.agents/agents/<name>.md` or `.agents/agents/<name>/agent.md`; global `~/.gemini/config/agents/<name>.md` or `.../<name>/agent.md`. Frontmatter supports `model` (`inherit`, `flash`, `pro`), `tools`, `skills`, `subagent`, `mainAgent`, and `commandExecutionPolicy`. Native subagents have no documented arbitrary model or per-worker effort; agree on a tier or use headless workers.
+- Headless: `agy -p` runs one prompt non-interactively and supports `--model`, `--effort`, `--agent`, `--output-format stream-json`, and `--sandbox`. This can honor exact worker model and effort. Do not add `--dangerously-skip-permissions` automatically; establish narrower permissions or sandboxing first.
+- Plan: `/plan` explores, clarifies, and drafts an Implementation Plan artifact. Review and **Proceed** enter execution; `Shift+Tab` cycles modes including plan. The planning agent is a host helper and keeps its defaults. Retain the plan and worker choice until execution is enabled.
+- Local Antigravity app was installed at the last check, but no standalone `agy` was found on PATH; discovery and execution remain unverified live.
 
-Sources: [subagents](https://antigravity.google/docs/subagents/), [skills](https://antigravity.google/docs/skills/).
+Sources: [subagents](https://antigravity.google/docs/subagents/), [skills](https://antigravity.google/docs/skills/), [customization discovery](https://antigravity.google/docs/customization-discovery/), [plan](https://antigravity.google/docs/plan/), [CLI reference](https://antigravity.google/docs/cli/reference/).
+
+## Cline
+
+- Skills: global `~/.cline/skills/`; project `.cline/skills/`, `.clinerules/skills/`, or `.claude/skills/`. Skills auto-activate by description and are exposed as `/skill-name` commands.
+- The CLI supports plan mode with `-p`/`--plan`, and headless automation with `--json`/`--auto-approve`. It also exposes `-m/--model`, `-P/--provider`, `--thinking` levels, and `--timeout`. Agent teams use coordinator/teammate tools. Inspect the installed schema before relying on parallel completion or per-call model settings.
+- Plan mode: `-p`/`--plan` keeps the run read-only. Enable execution before dispatching workers; a native programmatic approval transition is unverified.
+- Not live-tested. The install target was added because Cline's official global skills path is separate from `~/.agents`.
+
+Sources: [skills](https://docs.cline.bot/customization/skills), [CLI](https://docs.cline.bot/cli).
+
+## Kiro CLI
+
+- Skills: global `~/.kiro/skills/` and workspace `.kiro/skills/`. Kiro CLI has loaded skills since 1.24 and exposed them as `/skill-name` commands since 2.1; V3 supports both. V2 and V3 share the global directory, so one install serves both. `KIRO_HOME` overrides the global directory; the installer writes only the default `~/.kiro` path, so a custom profile needs a manual copy.
+- The default agent discovers both skill locations automatically. A custom agent loads skills only when its `resources` includes `skill://` URIs, unless default resource inheritance is enabled. Workspace skills override same-name global skills.
+- Subagents: native delegation. Any custom agent can run as a sub-agent; built-in context-gathering and general-purpose agents cover ordinary work. The parent selects by the agent's `description` or the user names it. Independent sub-agents run in parallel; the parent supports DAG dependencies, review loops, and waits for results. In V3 the orchestrator needs the `subagent` tool category, and the parent session's permissions also gate each sub-agent call. Headless runs deny calls that need approval.
+- Worker model: a custom agent's `model` field pins its model. Kiro does not document a per-subagent effort field; session effort comes from `/effort`, `--effort`, or `chat.modelDefaults`. Do not claim a per-worker effort was honored when only the session or model default applied. Resolve the limitation with the user.
+- For process workers, `kiro-cli chat --no-interactive --agent <name> --model <id> --effort <level>` can pin model and effort for that run; `--output-format stream-json` emits JSON Lines events. Use `--trust-tools` with exact tool IDs or scoped `permissions.yaml`; never add `--trust-all-tools` just to keep a worker running. In V3 headless, an unavailable model warns and the run continues, so verify the resolved model.
+- Model IDs: use `/model`, `kiro-cli chat --list-models --format json`, or the live catalog. Do not keep a static snapshot as an availability guarantee.
+- Plan: V3 toggles Plan mode with `Shift+Tab`; approval hands the plan to the Default agent for execution. V2 `/plan` switches to the Plan agent and `Shift+Tab` returns. The Plan agent is a host planning helper and keeps its defaults; retain the ready plan and worker choice, then dispatch only after execution is enabled.
+- AGENTS.md: Kiro reads root and subdirectory files and global `~/.kiro/steering/AGENTS.md`; they are always included as steering context.
+
+Sources: [skills](https://kiro.dev/docs/skills/), [configuration scopes](https://kiro.dev/docs/configuration/), [sub-agents](https://kiro.dev/docs/custom-agents/subagents/), [agent configuration](https://kiro.dev/docs/custom-agents/configuration-reference/), [CLI V3](https://kiro.dev/docs/cli/v3/), [CLI commands](https://kiro.dev/docs/reference/cli-commands/), [headless](https://kiro.dev/docs/cli/headless/), [effort](https://kiro.dev/docs/models/effort/), [steering](https://kiro.dev/docs/steering/).
 
 ## Headless fallback
 

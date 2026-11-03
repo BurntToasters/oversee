@@ -2,7 +2,15 @@
 
 Changes to the `oversee` skill, by version. The version comes from `version.txt` (`python bump-ver.py`). Dates are release dates; an unreleased version is marked as such.
 
-## 1.0.1 (unreleased)
+## 1.0.2
+
+### Changed
+
+- Installers and uninstallers now place the skill for Kiro CLI 2.x and V3 at `~/.kiro/skills/oversee` (Windows: `%USERPROFILE%\.kiro\skills\oversee`). Both versions share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
+- Installers and uninstallers now place the skill for Cline at `~/.cline/skills/oversee` (Windows: `%USERPROFILE%\.cline\skills\oversee`), its official global skills directory.
+- `references/harnesses.md`: expanded Antigravity support with current App/IDE/CLI skill paths, asynchronous subagents and custom-agent fields, `/plan` and Proceed handoff, and headless `agy -p --model --effort` for exact worker settings. Added a Cline section and recorded that many other hosts are already covered by `~/.agents/skills`.
+
+## 1.0.1
 
 ### Changed
 

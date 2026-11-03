@@ -12,8 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BASH = next((str(p) for p in [Path(r"C:\Program Files\Git\bin\bash.exe")]
              if p.exists()), None) or (shutil.which("bash") if os.name != "nt" else None)
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
-TARGETS = [".agents/skills/oversee", ".claude/skills/oversee", ".gemini/config/skills/oversee",
-           ".gemini/antigravity-cli/skills/oversee"]
+TARGETS = [".agents/skills/oversee", ".claude/skills/oversee", ".cline/skills/oversee",
+           ".gemini/config/skills/oversee", ".gemini/antigravity-cli/skills/oversee",
+           ".kiro/skills/oversee"]
 
 
 class Installers(unittest.TestCase):
