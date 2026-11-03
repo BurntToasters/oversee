@@ -1,6 +1,6 @@
 # oversee
 
-Version: `1.0.1` (preview).
+Version: `1.0.2` (preview).
 
 Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
@@ -22,10 +22,14 @@ The portable payload is `SKILL.md` plus `references/`. The following are intende
 |---|---|
 | OpenCode, Codex, GitHub Copilot, Cursor | `~/.agents/skills/oversee` |
 | Claude Code | `~/.claude/skills/oversee` |
-| Antigravity app | `~/.gemini/config/skills/oversee` |
-| Antigravity CLI | `~/.gemini/antigravity-cli/skills/oversee` |
+| Cline | `~/.cline/skills/oversee` |
+| Antigravity app, IDE, and CLI | `~/.gemini/config/skills/oversee` |
+| Antigravity CLI (additional path) | `~/.gemini/antigravity-cli/skills/oversee` |
+| Kiro CLI 2.x and V3 | `~/.kiro/skills/oversee` |
 
-Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot and Antigravity are supported on a best-effort basis: the installers still place the skill where they read it, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`), not arbitrary models.
+Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Cline, Antigravity, and Kiro CLI are supported on a best-effort basis: the installers still place the skill where they read it, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`) for native subagents; exact model and effort require its headless CLI. Kiro CLI 2.x and V3 share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
+
+Many other hosts read the same `~/.agents/skills/oversee` path and are covered by that entry, including Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
 
 Harness-specific subagent tools, model names, and effort flags live in [`references/harnesses.md`](references/harnesses.md).
 
@@ -87,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/BurntToasters/oversee/main/uninstal
 uninstall.bat
 ```
 
-Uninstall deletes only the `oversee` folder from the four locations above. Your other skills are untouched.
+Uninstall deletes only the `oversee` folder from the six locations above. Your other skills are untouched.
 
 ## Usage
 

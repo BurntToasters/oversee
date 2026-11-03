@@ -15,10 +15,16 @@ if errorlevel 1 goto :fail
 set "DEST=%USERPROFILE%\.claude\skills\oversee"
 call :install_to
 if errorlevel 1 goto :fail
+set "DEST=%USERPROFILE%\.cline\skills\oversee"
+call :install_to
+if errorlevel 1 goto :fail
 set "DEST=%USERPROFILE%\.gemini\config\skills\oversee"
 call :install_to
 if errorlevel 1 goto :fail
 set "DEST=%USERPROFILE%\.gemini\antigravity-cli\skills\oversee"
+call :install_to
+if errorlevel 1 goto :fail
+set "DEST=%USERPROFILE%\.kiro\skills\oversee"
 call :install_to
 if errorlevel 1 goto :fail
 echo Start a new agent session to load the skill.

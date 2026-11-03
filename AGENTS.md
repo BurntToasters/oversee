@@ -23,7 +23,7 @@ Owner: BurntToasters. License: MIT.
 | Design | Mostly settled. See Decisions below |
 | `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
 | `SKILL.md` | Explicit activation, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
-| `references/harnesses.md` | Official sources rechecked 2026-10-15; OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, and other hosts are not live-tested |
+| `references/harnesses.md` | Official sources rechecked 2026-10-15; Kiro CLI, Cline, and additional host coverage checked 2026-11-03. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
 | `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
 | `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
 | `CHANGELOG.md` | Per-version change log; 1.0.1 in progress |
@@ -50,7 +50,7 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 11. **Plan mode.** A ready conversation plan counts as existing work. In Plan mode the worker choice names who implements after approval, not who plans: the manager researches and plans itself, prepares briefs, records the worker choice in the plan, and uses native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers. Host planning helpers keep host defaults and never receive the worker choice. Outside Plan mode the same invocation plans and dispatches now.
 14. **Planning scope.** Agreed with the owner 2026-10-16. Planning, research, and audit are manager work in every mode. Workers research or audit only when the user explicitly asks; those workers are read-only and use the named worker choice.
 12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
-13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot and Antigravity are best-effort: keep installing to their paths and keep their harness notes, but their live verification is optional and does not block a release.
+13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: keep installing to their paths and keep their harness notes, but their live verification is optional and does not block a release.
 
 ## Invocation wording
 
@@ -84,16 +84,20 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 
 ## Install layout
 
-The scripts write those two items to four folders:
+The scripts write those two items to six folders:
 
 | Folder | Read by | Source |
 |---|---|---|
-| `~/.agents/skills/oversee` | OpenCode, Codex, Copilot, Cursor. Antigravity app per the Google codelab | Tool docs |
+| `~/.agents/skills/oversee` | OpenCode, Codex, Copilot, Cursor, and other cross-agent hosts | Tool docs |
 | `~/.claude/skills/oversee` | Claude Code. OpenCode and Cursor also read it, so they may see two copies | Tool docs |
-| `~/.gemini/config/skills/oversee` | Antigravity app | Antigravity docs. The codelab names a different path |
-| `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI | Official skills docs and Google codelab |
+| `~/.cline/skills/oversee` | Cline | Official Cline skills docs |
+| `~/.gemini/config/skills/oversee` | Antigravity app, IDE, and CLI | Antigravity docs. The codelab names a different path |
+| `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI additional path | Official skills and customization-discovery docs |
+| `~/.kiro/skills/oversee` | Kiro CLI 2.x and V3 | Official skills and configuration-scope docs |
 
-Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder from these four locations and nothing else.
+Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder from these six locations and nothing else.
+
+Many other hosts read `~/.agents/skills/oversee` and need no separate target: Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Copilot, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
 
 Internet install, added 2026-10-14:
 
@@ -103,7 +107,7 @@ Internet install, added 2026-10-14:
 - Installers stage and validate both managed items, replace the entire references subtree, and restore previous managed payload on replacement failure. Updates preserve unrelated files at the destination root and neighboring skills. Each target is a separate transaction; recovery failures must retain and report backup paths.
 - README documents that download-and-execute one-liners run remote code; avoid unsupported blanket claims about Windows signing policy.
 
-## Harness reference (checked 2026-10-15)
+## Harness reference (checked 2026-10-15; Kiro CLI, Cline, and additional hosts checked 2026-11-03)
 
 Doc links are under Sources at the end.
 
@@ -112,6 +116,7 @@ Doc links are under Sources at the end.
 | Harness | How the user runs it |
 |---|---|
 | Claude Code | `/oversee` |
+| Cline | `/oversee` in the CLI or IDE skill slash commands |
 | OpenCode v2 | Mention `@oversee` or use the native skill tool; TUI slash commands are configured separately |
 | OpenCode v1 | `/oversee` when the host honors `opencode/slash: "true"` |
 | Codex | `$oversee`, or pick it from `/skills`. Also matched by description |
@@ -119,6 +124,8 @@ Doc links are under Sources at the end.
 | Cursor | `/oversee` in Agent chat |
 | Antigravity app | `/oversee` in the prompt panel |
 | Antigravity CLI | Official docs confirm skills become slash commands such as `/oversee`; not live-tested here |
+| Kiro CLI 2.x | `/oversee` as a skill slash command from 2.1; earlier 2.x auto-loads skills by description |
+| Kiro CLI V3 | `/oversee` as a skill slash command, or automatic description match |
 
 ### Subagents
 
@@ -130,7 +137,9 @@ Doc links are under Sources at the end.
 | Codex | Ask in plain language. Built in: `default`, `worker`, `explorer` | Waits for all results, then consolidates | `~/.codex/agents/*.toml` or `.codex/agents/*.toml` | `model` and `model_reasoning_effort` in the file, or per spawn |
 | Copilot | Built-in or custom agents; inspect actual schema | Version-specific; not live-tested | `.github/agents/NAME.md` | Profile `model` is documented; per-call effort/override needs local verification |
 | Cursor | Task tool. Built in: explore, browser | Several calls in one message run in parallel. `is_background` flag | `.cursor/agents/*.md`. Also reads `.claude/agents` and `.codex/agents` | Frontmatter `model`: `inherit` or a model ID. Effort in brackets, such as `[effort=high]` |
-| Antigravity | `invoke_subagent` tool. Built in: research, browser, self | Runs concurrently. Results return as messages | `.agents/agents/NAME.md` or `~/.gemini/config/agents/NAME.md` | Tiers only: `inherit`, `flash`, or `pro` |
+| Antigravity | `invoke_subagent` and `define_subagent`; built in: research, browser, self | Asynchronous background subagents, parallel execution, nesting limit 10 | `.agents/agents/NAME.md` or `~/.gemini/config/agents/NAME.md` | Native subagents: tiers `inherit`, `flash`, `pro`; headless `agy -p --model --effort` for exact settings |
+| Cline | Agent teams with coordinator/teammate tools; headless CLI | Multi-agent teams; headless runs with `--json`/`--auto-approve` | Inspect current Cline agent config; not verified here | `-m/--model`, `-P/--provider`, `--thinking` levels |
+| Kiro CLI | Native subagent delegation; any custom agent can run as a sub-agent | Parallel, DAG dependencies, review loops; main agent waits and aggregates | `.kiro/agents/NAME.json` or `~/.kiro/agents/NAME.json` | Custom-agent `model`; session `--effort`; per-subagent effort not documented |
 
 ### Model selection and Plan-mode transitions
 
@@ -143,7 +152,10 @@ Model IDs and variants are location/version-specific. Discover them at run time;
 | Claude Code | Native plan approval/exit; user permission-mode control if tool absent |
 | Codex | Native app-server Plan-to-Default transition smoke-tested; retain ready plan and worker choice until host enables execution; UI remains unverified |
 | Cursor | User clicks Build after reviewing plan |
-| Copilot / Antigravity | Specific programmatic transitions unverified; request host implementation mode |
+| Antigravity | `/plan` creates an Implementation Plan artifact; **Proceed** enters execution; `Shift+Tab` cycles modes |
+| Cline | `-p`/`--plan` keeps the run read-only; enable execution before dispatch |
+| Kiro CLI | Native Plan mode (V3 `Shift+Tab`; V2 `/plan`); approval hands the plan to the Default agent |
+| Copilot | Specific programmatic transitions unverified; request host implementation mode |
 
 ### Reading AGENTS.md
 
@@ -155,6 +167,7 @@ Model IDs and variants are location/version-specific. Discover them at run time;
 | Cursor | Yes | Root and subdirectories |
 | Copilot | Yes | Nearest file wins. Also reads a root CLAUDE.md or GEMINI.md |
 | Antigravity | Yes | Any subdirectory (docs search snippet, not fetched) |
+| Kiro CLI | Yes | Root, subdirectories, and global steering; all AGENTS.md files are always included |
 
 Consequence for this repo: a CLAUDE.md added at the root would make Claude Code skip this file, unless the CLAUDE.md starts with `@AGENTS.md`. Keep this file well under 32 KiB.
 
@@ -185,7 +198,7 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
 - Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence. Scenarios 34-39 specify planning scope (worker choice never used for plan research unless requested, host helpers keep defaults, fresh-context plan handoff); also catalog-only. The OpenCode recorder now fails plan phases where a subagent ran with the requested worker setting.
 - Installer fault injection covers failure while publishing `SKILL.md` or `references/` to one target and failure of the subsequent restore, for both `install.bat` and `install.sh`. These are deterministic offline tests; they found no installer defects.
-- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery, macOS, and WSL in the current revision. Copilot and Antigravity live checks are optional (Decision 13). On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
+- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery, macOS, and WSL in the current revision. Copilot, Cline, Antigravity, and Kiro CLI live checks are optional (Decision 13); Kiro CLI and Cline are documentation-checked only, and Kiro per-subagent effort is not documented. On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
 - Default effort selection remains a relative difficulty heuristic limited to each model's supported variants. No cross-model strength ranking is claimed.
 
 ## Glossary
@@ -225,5 +238,38 @@ Checked 2026-10-15; source dates in retained evidence remain historical.
 - Cursor rules and AGENTS.md: https://cursor.com/docs/rules
 - Antigravity skills: https://antigravity.google/docs/skills/
 - Antigravity subagents: https://antigravity.google/docs/subagents/
+- Antigravity customization discovery: https://antigravity.google/docs/customization-discovery/
+- Antigravity plan: https://antigravity.google/docs/plan/
+- Antigravity CLI reference: https://antigravity.google/docs/cli/reference/
 - Antigravity rules (AGENTS.md in subdirectories, from a search snippet): https://antigravity.google/docs/rules/
 - Antigravity codelab: https://codelabs.developers.google.com/getting-started-with-antigravity-skills
+- Cline skills: https://docs.cline.bot/customization/skills
+- Cline CLI: https://docs.cline.bot/cli
+- Warp skills: https://docs.warp.dev/agents/capabilities/skills
+- Warp multi-agent orchestration: https://docs.warp.dev/platform/orchestration
+- Factory Droid skills: https://docs.factory.ai/harness/skills
+- Factory Droid subagents: https://docs.factory.ai/harness/subagents
+- Junie agent skills: https://junie.jetbrains.com/docs/agent-skills.html
+- Junie subagents: https://junie.jetbrains.com/docs/junie-cli-subagents.html
+- Qwen Code skills: https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/
+- Gemini CLI skills: https://geminicli.com/docs/cli/skills/
+- Amp skills: https://ampcode.com/docs/customize/skills
+- Goose skills: https://goose-docs.ai/docs/guides/context-engineering/using-skills
+- Pi skills: https://pi.dev/docs/latest/skills
+- OpenHands skills: https://docs.openhands.dev/overview/skills
+- Augment skills: https://docs.augmentcode.com/cli/skills
+- Crush skills: https://github.com/charmbracelet/crush#agent-skills
+- Devin CLI skills: https://docs.devin.ai/cli/extensibility/skills/overview
+- Zed skills: https://zed.dev/docs/ai/skills
+- Roo Code skills: https://docs.roocode.com/features/skills
+- Kilo Code skills: https://kilo.ai/docs/customize/skills
+- Windsurf skills: https://docs.windsurf.com/windsurf/cascade/skills
+- Kiro skills: https://kiro.dev/docs/skills/
+- Kiro configuration scopes: https://kiro.dev/docs/configuration/
+- Kiro sub-agents: https://kiro.dev/docs/custom-agents/subagents/
+- Kiro agent configuration: https://kiro.dev/docs/custom-agents/configuration-reference/
+- Kiro CLI V3: https://kiro.dev/docs/cli/v3/
+- Kiro CLI commands: https://kiro.dev/docs/reference/cli-commands/
+- Kiro CLI headless: https://kiro.dev/docs/cli/headless/
+- Kiro reasoning effort: https://kiro.dev/docs/models/effort/
+- Kiro steering and AGENTS.md: https://kiro.dev/docs/steering/
