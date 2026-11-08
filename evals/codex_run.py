@@ -150,8 +150,8 @@ def stage(output, case):
     shutil.copytree(ROOT / "evals/fixtures" / case["fixture"], project)
     skill = project / ".agents/skills/oversee"
     skill.mkdir(parents=True)
-    shutil.copyfile(ROOT / "SKILL.md", skill / "SKILL.md")
-    shutil.copytree(ROOT / "references", skill / "references")
+    shutil.copyfile(ROOT / "skills/oversee/SKILL.md", skill / "SKILL.md")
+    shutil.copytree(ROOT / "skills/oversee/references", skill / "references")
     (project / ".gitignore").write_text("__pycache__/\n*.pyc\n.notes.json\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
     subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)

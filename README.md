@@ -1,6 +1,8 @@
 # oversee
 
-Version: `1.0.2` (preview).
+[![skills.sh](https://skills.sh/b/BurntToasters/oversee)](https://skills.sh/BurntToasters/oversee)
+
+Version: `1.1.0` (preview).
 
 Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
@@ -11,12 +13,12 @@ The manager plans the work, dispatches independent pieces within available concu
 ## Requirements
 
 - A supported skills host with subagents or a headless fallback that preserves permissions
-- Bash, `curl`, and `tar` for internet installation with `install.sh`; Bash for local installation
-- PowerShell for Windows internet installation; `tar` when available, with a zip fallback
+- Node.js 22.20 or later for `npx skills add`
+- For the deprecated scripts: Bash, `curl`, and `tar` (`install.sh`), or PowerShell with `tar` or a zip fallback (Windows)
 
 ## Compatibility
 
-The portable payload is `SKILL.md` plus `references/`. The following are intended discovery locations; model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
+The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md` plus `references/`. The following are the discovery locations the deprecated scripts write to; `npx skills add` keeps one copy in `~/.agents/skills/oversee` and links or copies it into the folders of the agents it detects. Model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
 
 | Agent | Skill folder |
 |---|---|
@@ -31,11 +33,35 @@ Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Clin
 
 Many other hosts read the same `~/.agents/skills/oversee` path and are covered by that entry, including Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
 
-Harness-specific subagent tools, model names, and effort flags live in [`references/harnesses.md`](references/harnesses.md).
+Harness-specific subagent tools, model names, and effort flags live in [`references/harnesses.md`](skills/oversee/references/harnesses.md).
 
 Invocation syntax depends on the host version. Current OpenCode v2 docs describe loading a skill with `@oversee` or its native skill tool, while TUI slash commands are configured separately. The live smoke sent `/oversee` as prompt text through the local service API and attached the skill explicitly; this does not prove the TUI parser exposes that command. See the versioned notes in the harness reference.
 
 ## Install
+
+Install for every coding agent detected on this machine, globally:
+
+```bash
+npx skills add BurntToasters/oversee -g
+```
+
+### Customize the install:
+
+```bash
+npx skills add BurntToasters/oversee -g -a claude-code -a codex -y   # pick agents, no prompts
+npx skills add BurntToasters/oversee -g --copy                       # copies instead of symlinks
+npx skills add BurntToasters/oversee                                 # this project only
+npx skills check && npx skills update oversee -g                     # update
+npx skills remove oversee -g                                         # uninstall
+```
+
+It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` is set. Review any skill before use; it runs with your agent's permissions.
+
+Switching from the scripts: run the script uninstaller first (see Uninstall), then `npx skills add`. Otherwise `npx skills add` replaces the script-installed folders of the agents it targets with links, deleting any extra files you kept there, and leaves the other script copies (for example `~/.cline/skills/oversee` and `~/.gemini/config/skills/oversee`) behind, where `npx skills update` and `remove` never touch them.
+
+## Install (Deprecated - Will be removed in 1.2.0)
+
+The bundled scripts still work for machines without Node. They write the same payload to the six folders listed under Compatibility. Running them after an `npx skills` install is safe: `install.sh` skips the symlinked folders and updates the canonical copy.
 
 ### Unix (macOS, Linux, WSL, Git Bash)
 
@@ -53,7 +79,7 @@ cd oversee
 bash ./install.sh
 ```
 
-Re-run to update. Installers stage the complete payload, replace `SKILL.md` and the entire `references/` subtree, and restore the previous managed payload if replacement fails. Deleted upstream references disappear. Other files at the skill root and neighboring skills are preserved during updates. Recovery failures report the retained backup path. Each destination is a separate transaction; an earlier destination can succeed before a later one fails.
+Re-run to update. The scripts stage the complete payload, replace `SKILL.md` and the entire `references/` subtree, and restore the previous managed payload if replacement fails. Deleted upstream references disappear. Other files at the skill root and neighboring skills are preserved during updates. Recovery failures report the retained backup path. Each destination is a separate transaction; an earlier destination can succeed before a later one fails.
 
 ### Windows
 
@@ -73,6 +99,8 @@ These one-liners execute downloaded code. Inspect the script before running it i
 
 ## Uninstall
 
+After an `npx skills` install, run `npx skills remove oversee -g`. For the deprecated scripts:
+
 ### Unix
 
 ```bash
@@ -91,7 +119,7 @@ curl -fsSL https://raw.githubusercontent.com/BurntToasters/oversee/main/uninstal
 uninstall.bat
 ```
 
-Uninstall deletes only the `oversee` folder from the six locations above. Your other skills are untouched.
+Uninstall deletes only the `oversee` folder, or symlink, from the six locations above. Your other skills are untouched.
 
 ## Usage
 
@@ -137,6 +165,7 @@ User/harness deadlines and cancellation stop further dispatch and request cancel
 
 ## Development
 
+- The payload is `skills/oversee/`; keep everything else at the repository root, because the skills CLI copies the whole skill folder.
 - `version.txt` is the skill's version source. Run `python bump-ver.py patch`, `minor`, `major`, or an exact version such as `0.2.0-rc.1`. The script synchronizes `version.txt`, skill metadata, and the README version line; it preserves line endings and leaves model/harness versions and historical evidence unchanged. Add new current-version declarations to `TARGETS` in the script.
 - Run `python bump-ver.py --check` before a release. Use `python bump-ver.py patch --dry-run` to preview. The script stops on version drift or missing declarations before changing files. Version tooling is development-only and is not installed with the skill.
 - Eval scenarios live in [`evals/evals.json`](evals/evals.json). The catalog includes manual/fault-injection scenarios as well as the three automated pilot cases; adding a scenario is not evidence it passed.

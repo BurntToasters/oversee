@@ -2,11 +2,11 @@
 
 Instructions for agents working on this repo. Read this before changing anything.
 
-This file is not installed with the skill. The install scripts copy only `SKILL.md` and `references/`. Anything the installed skill needs at runtime must live in those two places.
+This file is not installed with the skill. The installed payload is `skills/oversee/` (`SKILL.md` plus `references/`), whether installed by `npx skills add` or by the bundled scripts. Anything the installed skill needs at runtime must live there.
 
 ## What this repo is
 
-`oversee` is one agent skill. The repo root is the skill folder. Users run it with `/oversee`.
+`oversee` is one agent skill. The skill folder is `skills/oversee/`; the repo root holds docs, installers, evals, and tests. Users run it with `/oversee`.
 
 The README premise: a larger model oversees other subagents without micromanaging them.
 
@@ -16,17 +16,18 @@ Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in 
 
 Owner: BurntToasters. License: MIT.
 
-## Status (2026-10-15)
+## Status (2026-11-07)
 
 | Item | State |
 |---|---|
 | Design | Mostly settled. See Decisions below |
-| `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
+| `npx skills add BurntToasters/oversee -g` | Primary installer since 1.1.0. skills CLI 1.7.6 smoke-tested on macOS against a throwaway `HOME` with a local-path source: one canonical copy in `~/.agents/skills/oversee`, symlinks for Claude Code and Kiro. GitHub-source install not yet run |
+| `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Legacy installers, kept for hosts without Node. Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
 | `SKILL.md` | Explicit activation, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
-| `references/harnesses.md` | Official sources rechecked 2026-10-15; Kiro CLI, Cline, and additional host coverage checked 2026-11-03. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
+| `references/harnesses.md` | Official sources rechecked 2026-10-15; Kiro CLI, Cline, and additional host coverage checked 2026-11-03; Claude Code, Codex, OpenCode v2, Cursor, Kiro rechecked 2026-11-07. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
 | `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
 | `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
-| `CHANGELOG.md` | Per-version change log; 1.0.1 in progress |
+| `CHANGELOG.md` | Per-version change log; 1.1.0 in progress |
 | `README.md` | Written with install, uninstall, compatibility, and usage instructions |
 
 ## Decisions
@@ -80,11 +81,13 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 - `name` is `oversee`, matching the folder name. Use lowercase letters, digits, and single hyphens only.
 - `description` is 1 to 1024 characters. Lead with the `/oversee` trigger and the coding-only scope.
 - `SKILL.md` stays under 500 lines. Put detail in `references/`, one level deep.
-- The installed payload is `SKILL.md` and `references/` only.
+- The installed payload is `skills/oversee/` only, holding `SKILL.md` and `references/`. Put nothing else in that folder: the skills CLI copies the whole folder, and `tests/test_installers.py` checks the layout.
 
 ## Install layout
 
-The scripts write those two items to six folders:
+Primary: `npx skills add BurntToasters/oversee -g` (skills CLI by Vercel Labs, Node 22.20+). It discovers `skills/oversee/SKILL.md`, writes one canonical copy to `~/.agents/skills/oversee`, and symlinks or copies into the folders of detected agents (`-a <agent>` selects, `--copy` avoids symlinks, `-y` skips prompts). `npx skills update`, `check`, and `remove` manage it; `DISABLE_TELEMETRY=1` opts out of its telemetry. The CLI's global paths differ from ours for some hosts (OpenCode `~/.config/opencode/skills`, Cursor `~/.cursor/skills`, Copilot `~/.copilot/skills`); those hosts also read `~/.agents/skills`.
+
+Legacy scripts write the payload to six folders:
 
 | Folder | Read by | Source |
 |---|---|---|
@@ -95,9 +98,9 @@ The scripts write those two items to six folders:
 | `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI additional path | Official skills and customization-discovery docs |
 | `~/.kiro/skills/oversee` | Kiro CLI 2.x and V3 | Official skills and configuration-scope docs |
 
-Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder from these six locations and nothing else.
+Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder (or symlink) from these six locations and nothing else. `install.sh` skips a destination that is a symlink, so it coexists with an `npx skills` install; `install.bat` writes through junctions, which also lands in the canonical copy.
 
-Many other hosts read `~/.agents/skills/oversee` and need no separate target: Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Copilot, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
+Many other hosts read `~/.agents/skills/oversee` and need no separate target; the list is in `references/harnesses.md`.
 
 Internet install, added 2026-10-14:
 
@@ -131,7 +134,7 @@ Doc links are under Sources at the end.
 
 | Harness | Spawn workers with | Parallel and wait | Custom worker file | Model and effort |
 |---|---|---|---|---|
-| Claude Code | `Agent` tool with `subagent_type` | Several calls in one message run in parallel. Background mode exists | `.claude/agents/*.md` or `~/.claude/agents/` | Per call: `model` (alias or full ID) and `effort` |
+| Claude Code | `Agent` tool with `subagent_type` | Several calls in one message run in parallel. Background by default; 20 concurrent, 3 nesting layers | `.claude/agents/*.md` or `~/.claude/agents/` | Per call: `model` alias only and `effort` (v2.1.292+). Full model ID only in profile frontmatter; env overrides can win |
 | OpenCode v2 | Native `subagent`; General and Explore; no Scout | Foreground blocks; background completion notice | `.opencode/agents/*.md`; config uses `agents`, `system`, `permissions` | Per-call model when exposed; `provider/model#variant` from live catalog |
 | OpenCode v1 | Task delegation; General, Explore, Scout | Inspect active schema/version | Profiles or singular `agent` config | Native selection/profile capabilities differ from v2 |
 | Codex | Ask in plain language. Built in: `default`, `worker`, `explorer` | Waits for all results, then consolidates | `~/.codex/agents/*.toml` or `.codex/agents/*.toml` | `model` and `model_reasoning_effort` in the file, or per spawn |
@@ -139,7 +142,7 @@ Doc links are under Sources at the end.
 | Cursor | Task tool. Built in: explore, browser | Several calls in one message run in parallel. `is_background` flag | `.cursor/agents/*.md`. Also reads `.claude/agents` and `.codex/agents` | Frontmatter `model`: `inherit` or a model ID. Effort in brackets, such as `[effort=high]` |
 | Antigravity | `invoke_subagent` and `define_subagent`; built in: research, browser, self | Asynchronous background subagents, parallel execution, nesting limit 10 | `.agents/agents/NAME.md` or `~/.gemini/config/agents/NAME.md` | Native subagents: tiers `inherit`, `flash`, `pro`; headless `agy -p --model --effort` for exact settings |
 | Cline | Agent teams with coordinator/teammate tools; headless CLI | Multi-agent teams; headless runs with `--json`/`--auto-approve` | Inspect current Cline agent config; not verified here | `-m/--model`, `-P/--provider`, `--thinking` levels |
-| Kiro CLI | Native subagent delegation; any custom agent can run as a sub-agent | Parallel, DAG dependencies, review loops; main agent waits and aggregates | `.kiro/agents/NAME.json` or `~/.kiro/agents/NAME.json` | Custom-agent `model`; session `--effort`; per-subagent effort not documented |
+| Kiro CLI | Native subagent delegation; any custom agent file can run as a sub-agent; no ad-hoc definition in 2.x or V3 | Parallel, DAG dependencies, review loops; main agent waits and aggregates | `.kiro/agents/NAME.json|.md` or `~/.kiro/agents/` | Custom-agent `model`; effort only per session (`--effort`, `/effort`) or per model via `chat.modelDefaults`; no per-subagent effort |
 
 ### Model selection and Plan-mode transitions
 
@@ -176,7 +179,7 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - `SKILL.md` is the behavior source of truth. Keep it lean. Move detail into `references/`.
 - Harness-specific syntax and model IDs go only in `references/harnesses.md`. Keep it matched to the tables above.
 - Don't state harness behavior from memory. Check the official docs, and record the source and date.
-- If an install path changes, update all four install and uninstall scripts and the install table here in the same change.
+- If an install path changes, update all four install and uninstall scripts, the install table here, and the README. The skills CLI picks its own paths; do not mirror them in the scripts.
 - Line endings: `.bat` files must use CRLF, because cmd can fail on LF-only files, especially with GOTO and labels. `.sh` files must use LF, because bash fails on CR. Check line endings after every edit.
 - Test the install scripts against a throwaway folder. Point `USERPROFILE` (cmd) or `HOME` (bash) at a fixture folder first. Don't run the scripts against the real profile unless the owner asks.
 - Keep this file under 32 KiB so Codex reads all of it.
@@ -191,10 +194,10 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - Run `python -B -m unittest discover -s tests -v` for deterministic installer/evidence checks. Tests use temporary profiles and mock downloads; no real-profile installs or live inference.
 - `evals/run.py` records six paired OpenCode sessions with caller-specified manager/worker settings. Outputs belong in a new sibling workspace folder. Usage/cost must come from native records; missing measurements stay unknown.
 - `evals/codex_run.py` records unpaired Codex smoke cases with caller-specified settings and native completion events. `evals/codex_review.py` validates retained file hashes and recovers root/child turn contexts without inference. Do not apply OpenCode's transcript schema to Codex events. Current and legacy child-event shapes require coverage; thread configuration alone is not per-turn execution proof.
-- The older three-case 100% versus 55% score graded workflow compliance using summary logs. It is not evidence of coding superiority or savings. Do not repeat it as a performance claim.
-- First attempt failed Console authentication. At the caller's direction, six Go sessions then ran using Muse Spark 1.3 Contributor xhigh and DeepSeek V4.1 Flash max. Both overseen coding cases passed independent behavior checks, with exact workers, concurrency/dependencies, and Plan handoff observed. Two coding follow-ups retested final silence/scratch wording: behavior and handoff passed, but narration compliance still failed. The original verified scratch artifact was removed; external filesystem cleanliness is not proven by the follow-up reports.
+- Six Go sessions then ran using Muse Spark 1.3 Contributor xhigh and DeepSeek V4.1 Flash max. Both overseen coding cases passed independent behavior checks, with exact workers, concurrency/dependencies, and Plan handoff observed. Two coding follow-ups retested final silence/scratch wording: behavior and handoff passed, but narration compliance still failed. The original verified scratch artifact was removed; external filesystem cleanliness is not proven by the follow-up reports.
 - Evidence: `../oversee-workspace/reliability-pilot-go/`; corrected derived review: `../oversee-workspace/reliability-pilot-go-reviewed/`. Small-pilot native costs were higher with oversee ($0.029469 versus $0.006872); dependent baseline was incomplete. No savings claim is justified.
 - Codex smoke evidence: `../oversee-workspace/codex-smoke-1/`; recovered/graded evidence: `../oversee-workspace/codex-smoke-1-reviewed/`. Caller chose GPT-6.1 Sol medium with GPT-6 Luna max. Ordinary-question and parallel cases passed observed orchestration checks; dependent implementation passed behavior, exact settings, and native handoff, but failed silence. Original exporter missed current child-event shapes; derived review recovers them from retained native events without more model calls. Cost is unknown.
+- `npx skills add` was run once (skills 1.7.6, macOS, local-path source, throwaway `HOME`). The GitHub-source path, `skills update` after the layout move, and Windows symlink/junction behavior are untested.
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
 - Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence. Scenarios 34-39 specify planning scope (worker choice never used for plan research unless requested, host helpers keep defaults, fresh-context plan handoff); also catalog-only. The OpenCode recorder now fails plan phases where a subagent ran with the requested worker setting.
 - Installer fault injection covers failure while publishing `SKILL.md` or `references/` to one target and failure of the subsequent restore, for both `install.bat` and `install.sh`. These are deterministic offline tests; they found no installer defects.
@@ -215,6 +218,7 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 Checked 2026-10-15; source dates in retained evidence remain historical.
 
 - Agent Skills spec: https://agentskills.io/specification
+- skills CLI (docs/commands.md, docs/agents.md, docs/creating-skills.md): https://github.com/vercel-labs/skills
 - Claude Code skills: https://code.claude.com/docs/en/skills
 - Claude Code subagents: https://code.claude.com/docs/en/sub-agents
 - Claude Code memory and AGENTS.md: https://code.claude.com/docs/en/memory

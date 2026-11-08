@@ -3,6 +3,7 @@ setlocal EnableExtensions DisableDelayedExpansion
 rem Installs or updates only the oversee payload, with per-target recovery.
 
 set "SRC=%~dp0"
+if exist "%SRC%skills\oversee\SKILL.md" set "SRC=%SRC%skills\oversee\"
 set "STAGE="
 if not defined USERPROFILE goto :nohome
 if not exist "%SRC%SKILL.md" goto :missing
@@ -107,7 +108,7 @@ echo Error: restore failed; recovery files retained at "%STAGE%"
 exit /b 1
 
 :missing
-echo Error: SKILL.md and references\harnesses.md must be next to this script.
+echo Error: skills\oversee\SKILL.md and references\harnesses.md were not found next to this script.
 goto :fail
 
 :nohome

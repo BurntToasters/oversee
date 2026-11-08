@@ -44,8 +44,8 @@ class RollbackFaults(unittest.TestCase):
         self.neighbor.write_text("keep")
 
     def new_tree(self):
-        expected = {"SKILL.md": (self.source / "SKILL.md").read_bytes(), "keep.txt": b"user file"}
-        for rel, data in tree(self.source / "references").items():
+        expected = {"SKILL.md": (self.payload / "SKILL.md").read_bytes(), "keep.txt": b"user file"}
+        for rel, data in tree(self.payload / "references").items():
             expected["references/" + rel] = data
         return expected
 

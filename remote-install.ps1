@@ -44,8 +44,8 @@ try {
         }
     }
 
-    if (-not (Test-Path -LiteralPath (Join-Path $extract 'SKILL.md') -PathType Leaf) -or
-        -not (Test-Path -LiteralPath (Join-Path $extract 'references/harnesses.md') -PathType Leaf) -or
+    if (-not (Test-Path -LiteralPath (Join-Path $extract 'skills/oversee/SKILL.md') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $extract 'skills/oversee/references/harnesses.md') -PathType Leaf) -or
         -not (Test-Path -LiteralPath (Join-Path $extract 'install.bat') -PathType Leaf)) {
         throw "The downloaded skill payload is incomplete."
     }

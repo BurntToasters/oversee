@@ -9,6 +9,7 @@ import unittest
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+PAYLOAD = ROOT / "skills/oversee"
 BASH = next((str(p) for p in [Path(r"C:\Program Files\Git\bin\bash.exe")]
              if p.exists()), None) or (shutil.which("bash") if os.name != "nt" else None)
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
@@ -24,9 +25,10 @@ class Installers(unittest.TestCase):
         self.root = Path(self.temp.name).resolve()
         self.source = self.root / "source with spaces"
         self.source.mkdir()
-        for name in ["install.sh", "install.bat", "uninstall.sh", "uninstall.bat", "remote-install.ps1", "SKILL.md"]:
+        for name in ["install.sh", "install.bat", "uninstall.sh", "uninstall.bat", "remote-install.ps1"]:
             shutil.copyfile(ROOT / name, self.source / name)
-        shutil.copytree(ROOT / "references", self.source / "references")
+        self.payload = self.source / "skills/oversee"
+        shutil.copytree(PAYLOAD, self.payload)
         self.profile = self.root / "profile with spaces"
         self.profile.mkdir()
         self.downloads = self.root / "downloads"
@@ -51,7 +53,7 @@ class Installers(unittest.TestCase):
         installed = self.run_script(platform, "install")
         self.assertEqual(installed.returncode, 0, installed.stdout + installed.stderr)
         for target in self.targets:
-            self.assertEqual((target / "SKILL.md").read_bytes(), (ROOT / "SKILL.md").read_bytes())
+            self.assertEqual((target / "SKILL.md").read_bytes(), (PAYLOAD / "SKILL.md").read_bytes())
             self.assertEqual(sorted(p.name for p in target.iterdir()), ["SKILL.md", "references"])
             (target / "keep.txt").write_text("user file")
             (target / "references/obsolete.md").write_text("old instruction")
@@ -100,7 +102,7 @@ class Installers(unittest.TestCase):
         self.lifecycle("bash")
 
     def incomplete(self, platform):
-        (self.source / "references/harnesses.md").unlink()
+        (self.payload / "references/harnesses.md").unlink()
         result = self.run_script(platform, "install")
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(all(not target.exists() for target in self.targets))
@@ -251,7 +253,7 @@ class Installers(unittest.TestCase):
     def remote_powershell(self, mode):
         self.env.update(AUDIT_ARCHIVE=str(self.archive()), AUDIT_SOURCE=str(self.source), AUDIT_MODE=mode)
         script = self.root / "remote-test.ps1"
-        script.write_text("""
+        script.write_text(r"""
 $ErrorActionPreference = 'Stop'
 function Invoke-WebRequest {
     param($Uri, $OutFile)
@@ -263,7 +265,8 @@ function Invoke-WebRequest {
 if ($env:AUDIT_MODE -eq 'tar-failure') {
     function audit-tar {
         $folder = $args[[Array]::IndexOf($args, '-C') + 1]
-        Copy-Item -LiteralPath (Join-Path $env:AUDIT_SOURCE 'SKILL.md') -Destination $folder
+        New-Item -ItemType Directory -Path (Join-Path $folder 'skills/oversee') -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $env:AUDIT_SOURCE 'skills/oversee/SKILL.md') -Destination (Join-Path $folder 'skills/oversee')
         New-Item -ItemType Directory -Path (Join-Path $folder 'stale-partial') | Out-Null
         Set-Content -LiteralPath (Join-Path $folder 'stale-partial/partial.txt') -Value 'partial'
         $global:LASTEXITCODE = 7
@@ -337,6 +340,30 @@ function Invoke-WebRequest {
         self.assertIn("both failed", result.stdout + result.stderr)
         self.assertTrue(all(not t.exists() for t in self.targets))
         self.assertFalse(any(self.downloads.glob("oversee-*")))
+
+    @unittest.skipUnless(BASH, "Bash not available")
+    def test_bash_skips_symlinked_target_and_updates_canonical_copy(self):
+        canonical, linked = self.targets[0], self.targets[1]
+        canonical.mkdir(parents=True)
+        (canonical / "SKILL.md").write_text("old skill")
+        linked.parent.mkdir(parents=True)
+        linked.symlink_to(Path("../../.agents/skills/oversee"))
+        result = self.run_script("bash", "install")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Skipped:", result.stdout)
+        self.assertTrue(linked.is_symlink())
+        self.assertEqual((canonical / "SKILL.md").read_bytes(), (PAYLOAD / "SKILL.md").read_bytes())
+        self.assertEqual((linked / "SKILL.md").read_bytes(), (PAYLOAD / "SKILL.md").read_bytes())
+        self.assertEqual(self.run_script("bash", "uninstall").returncode, 0)
+        self.assertFalse(linked.is_symlink())
+        self.assertFalse(canonical.exists())
+
+    def test_payload_layout_for_skills_cli(self):
+        # `npx skills add` copies the whole skill folder, so it must hold only the payload.
+        self.assertFalse((ROOT / "SKILL.md").exists())
+        self.assertEqual(sorted(p.name for p in PAYLOAD.iterdir()), ["SKILL.md", "references"])
+        head = (PAYLOAD / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+        self.assertIn("\nname: oversee\n", head)
 
     def test_line_endings(self):
         for path in ROOT.glob("*.bat"):
