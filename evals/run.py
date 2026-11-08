@@ -216,8 +216,8 @@ def fixture(output, case, with_skill):
     if with_skill:
         skill = project / ".opencode/skills/oversee"
         skill.mkdir(parents=True)
-        shutil.copyfile(ROOT / "SKILL.md", skill / "SKILL.md")
-        shutil.copytree(ROOT / "references", skill / "references")
+        shutil.copyfile(ROOT / "skills/oversee/SKILL.md", skill / "SKILL.md")
+        shutil.copytree(ROOT / "skills/oversee/references", skill / "references")
     # Same explicit permissions in both arms; no --auto or changes to the real profile.
     rules = [{"action": action, "resource": "*", "effect": "deny"}
              for action in ["external_directory", "webfetch", "websearch", "shell"]]

@@ -15,7 +15,7 @@ SEMVER = re.compile(
 )
 # Register new current-version declarations here; historical versions are not targets.
 TARGETS = {
-    "SKILL.md": re.compile(rb'(?m)^  version: "([^"\r\n]+)"\r?$'),
+    "skills/oversee/SKILL.md": re.compile(rb'(?m)^  version: "([^"\r\n]+)"\r?$'),
     "README.md": re.compile(rb'(?m)^Version: `([^`\r\n]+)`[^\r\n]*\r?$'),
 }
 

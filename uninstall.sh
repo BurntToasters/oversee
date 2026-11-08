@@ -23,7 +23,7 @@ for dest_dir in "${dest_dirs[@]}"; do
 done
 
 for dest_dir in "${dest_dirs[@]}"; do
-  if [ -e "${dest_dir}" ]; then
+  if [ -e "${dest_dir}" ] || [ -L "${dest_dir}" ]; then
     rm -rf "${dest_dir}"
     echo "Removed: ${dest_dir}"
   else

@@ -18,11 +18,12 @@ class VersionTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / "version.txt").write_bytes(b"1.2.3\n")
-        (self.root / "SKILL.md").write_bytes(b'---\nmetadata:\n  version: "1.2.3"\n---\n')
+        (self.root / "skills/oversee").mkdir(parents=True)
+        (self.root / "skills/oversee/SKILL.md").write_bytes(b'---\nmetadata:\n  version: "1.2.3"\n---\n')
         (self.root / "README.md").write_bytes(b"Version: `1.2.3` (preview).\nHarness: v2.0.29\nHistory: 1.2.3\n")
 
     def contents(self):
-        return {p.name: p.read_bytes() for p in self.root.iterdir()}
+        return {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
 
     def test_repository_declarations_match_canonical_version(self):
         self.assertEqual(bump.update(ROOT), (ROOT / "version.txt").read_text().strip())
@@ -33,7 +34,7 @@ class VersionTests(unittest.TestCase):
                 original = self.contents()
                 bump.update(self.root, part)
                 self.assertEqual(bump.update(self.root), expected)
-                self.assertIn(f'  version: "{expected}"'.encode(), (self.root / "SKILL.md").read_bytes())
+                self.assertIn(f'  version: "{expected}"'.encode(), (self.root / "skills/oversee/SKILL.md").read_bytes())
                 readme = (self.root / "README.md").read_text()
                 self.assertIn(f"Version: `{expected}`", readme)
                 self.assertIn("Harness: v2.0.29\nHistory: 1.2.3", readme)
@@ -54,7 +55,7 @@ class VersionTests(unittest.TestCase):
             self.assertEqual(self.contents(), before)
 
     def test_drift_missing_or_duplicate_declarations_cannot_change_files(self):
-        path = self.root / "SKILL.md"
+        path = self.root / "skills/oversee/SKILL.md"
         for content in [b'  version: "9.9.9"\n', b"missing\n", b'  version: "1.2.3"\n' * 2]:
             path.write_bytes(content)
             before = self.contents()
@@ -69,12 +70,12 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(self.contents(), before)
 
     def test_preserves_crlf_and_readme_status(self):
-        for path in self.root.iterdir():
+        for path in [p for p in self.root.rglob("*") if p.is_file()]:
             path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
         readme = self.root / "README.md"
         readme.write_bytes(readme.read_bytes().replace(b"(preview)", b"(stable)"))
         bump.update(self.root, "patch")
-        for path in self.root.iterdir():
+        for path in [p for p in self.root.rglob("*") if p.is_file()]:
             self.assertNotIn(b"\n", path.read_bytes().replace(b"\r\n", b""))
         self.assertIn(b"(stable)", readme.read_bytes())
 
