@@ -1,8 +1,8 @@
 # oversee
 
-[![skills.sh](https://skills.sh/b/BurntToasters/oversee)](https://skills.sh/BurntToasters/oversee)
+<!-- [![skills.sh](https://skills.sh/b/BurntToasters/oversee)](https://skills.sh/BurntToasters/oversee) -->
 
-Version: `1.1.0` (preview).
+Version: `1.1.0`.
 
 Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
