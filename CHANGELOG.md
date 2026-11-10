@@ -24,6 +24,21 @@ It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI cust
 
 Switching from the scripts: run the script uninstaller first (see Uninstall), then `npx skills add`. Otherwise `npx skills add` replaces the script-installed folders of the agents it targets with links, deleting any extra files you kept there, and leaves the other script copies (for example `~/.cline/skills/oversee` and `~/.gemini/config/skills/oversee`) behind, where `npx skills update` and `remove` never touch them.
 
+## 1.1.1
+
+### Fixed
+
+- After a finished run, a later request such as "audit the codebase" could be treated as more oversee work and sent to the earlier run's worker model. A run now ends with its final report: later messages are ordinary requests, the manager role does not persist, and the worker choice is not a standing preference for subagents. A new run needs a new invocation.
+
+### Changed
+
+- Oversee is implementation-only. Workers change code; auditing, reviewing, mapping, research, and explanation are always done by the manager or main agent. The exception that let workers research or audit on explicit request is removed, because it was the route by which audit requests reached workers.
+- An audit-only or repo-mapping invocation dispatches no workers: the main agent does the work and mentions that `/oversee` can implement the fixes. An audit-and-fix invocation still works: the manager audits, workers fix.
+- No workers start in Plan mode, including read-only ones.
+- `SKILL.md` reorganized: a "When this skill applies" section states the three limits (invocation only, implementation only, one run then done) ahead of the run steps, and the description names the implementation-only scope.
+- `references/harnesses.md`: read-only built-in agents belong to the host and are never dispatched by oversee.
+- Eval catalog: scenarios 29, 37, and 38 now expect manager-only auditing and research; scenarios 40-44 cover post-run requests and read-only invocations. Catalog-only, not run live.
+
 ## 1.1.0
 
 ### Added

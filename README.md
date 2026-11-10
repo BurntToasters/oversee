@@ -2,13 +2,13 @@
 
 <!-- [![skills.sh](https://skills.sh/b/BurntToasters/oversee)](https://skills.sh/BurntToasters/oversee) -->
 
-Version: `1.1.0`.
+Version: `1.1.1`.
 
 Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
 
 An [Agent Skill](https://agentskills.io) for a manager model to oversee worker subagents without micromanaging them. You choose any model and effort supported by your current harness; names in examples are not defaults or an allowlist.
 
-The manager plans the work, dispatches independent pieces within available concurrency, waits without polling, audits changes against the starting workspace, runs checks itself, and reports the result. Fewer manager check-ins is the design goal; lower total tokens or cost is not yet established by a successful live pilot.
+The manager plans the work, dispatches independent pieces within available concurrency, waits without polling, audits changes against the starting workspace, runs checks itself, and reports the result. Oversee is for implementation only: workers change code, and never audit, review, or map a repository. Fewer manager check-ins is the design goal; lower total tokens or cost is not yet established by a successful live pilot.
 
 ## Requirements
 
@@ -148,18 +148,20 @@ Model-only invocations such as `/oversee LUNA MAX` use the ready plan or remaini
 
 The same invocation works in or out of Plan mode. In Plan mode, `/oversee Haiku 5.5 high` added to a task or plan means "implement this plan with Haiku 5.5 high workers": the manager researches and plans itself (the host's own planning helpers keep their defaults), prepares worker briefs, and records the worker choice in the plan through the host's approval/Build transition. Workers start only after the host enables execution. Another skill invocation is unnecessary. If the host exposes no transition tool, oversee explains the required user action. Outside Plan mode, the same invocation plans and dispatches workers now.
 
-Workers implement. They research or audit only when you ask for that explicitly, for example `/oversee Haiku 5.5 high: have workers map where list output is built, then add --json`; such workers are read-only.
+Workers only implement. They never audit, review, map, or research a repository; the manager does that reading itself. `/oversee Haiku 5.5 high: audit the parser for missing validation, then fix what you find` means the manager audits and the workers fix. An audit-only request dispatches nothing: the main agent does it directly.
+
+A run ends with its report. Later requests in the same conversation, such as another codebase audit, are ordinary requests; they do not restart the workflow or reuse the earlier worker model. Invoke `/oversee` again to hand new work to workers.
 
 Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard; optional host-enforced invocation controls are documented in the harness reference and are not installed automatically.
 
 ## How it works
 
-1. **Plan.** The manager inspects the project itself, restates the task, defines done with the project's real check commands, and splits the work into pieces with clear file ownership. Workers do not research for the plan unless you ask.
+1. **Plan.** The manager inspects the project itself, restates the task, defines done with the project's real check commands, and splits the work into pieces with clear file ownership. Workers never research for the plan.
 2. **Brief.** Each worker gets a self-contained brief: goal, scope, constraints, definition of done, and the reporting format. Outcomes, not steps.
 3. **Dispatch and wait.** Independent workers go out together within host limits. Blocking waits and completion notices replace status polling. Necessary clarification, approval, and cancellation handling remain allowed.
 4. **Audit.** The manager compares staged, unstaged, and untracked changes against the initial snapshot, preserves existing user edits, runs acceptance checks itself, then runs integration checks.
 5. **Retry only failed pieces**, capped at two per piece, then escalate to the user.
-6. **Report the result only.**
+6. **Report the result only.** The report ends the run.
 
 User/harness deadlines and cancellation stop further dispatch and request cancellation of active workers. There is no default time limit. Wait transport timeouts alone do not mean a worker failed. Permission denials and unavailable models are blockers, not reasons to spend implementation retries.
 

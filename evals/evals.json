@@ -336,8 +336,8 @@
       "execution": "scenario",
       "prompt": "/oversee {worker}: audit the notes CLI for missing tests, then fix the actionable findings. Resolve anything ambiguous before dispatch.",
       "expectations": [
-        "Audit runs before any implementing dispatch; findings become scoped pieces",
-        "Ambiguous findings or acceptance gaps are resolved before dispatch"
+        "Manager performs the audit itself before any dispatch; no subagent audits or runs with the requested worker setting until fixes are dispatched",
+        "Findings become scoped implementation pieces; ambiguous findings or acceptance gaps are resolved before dispatch"
       ]
     },
     {
@@ -420,23 +420,23 @@
     },
     {
       "id": 37,
-      "name": "explicit-research-request",
+      "name": "research-request-stays-with-manager",
       "fixture": "notes-cli",
       "execution": "scenario",
       "prompt": "/oversee {worker}: have workers survey store.py and notes.py for untested behavior and report findings, then plan and implement the missing tests.",
       "expectations": [
-        "Research workers are read-only, use the requested worker, and make no fixture changes",
-        "Manager verifies cited findings in the code before planning; implementing pieces follow with exclusive ownership"
+        "Manager surveys the code itself and says so in one line; no read-only or research subagent runs with the requested worker setting",
+        "Workers are dispatched only for the missing tests, with exclusive ownership; manager audits and runs checks"
       ]
     },
     {
       "id": 38,
-      "name": "plan-mode-explicit-research",
+      "name": "plan-mode-research-request",
       "fixture": "notes-cli",
       "execution": "scenario",
       "prompt": "In Plan mode: /oversee {worker}: use workers to find where list output is formatted, then plan adding --json to list.",
       "expectations": [
-        "Read-only research workers with the requested worker are allowed because the user asked; no edits or implementing workers in Plan mode",
+        "Manager finds the formatting code itself; no workers start in Plan mode, including read-only ones with the requested worker",
         "Implementation waits for the host to enable execution and retains the worker choice"
       ]
     },
@@ -449,6 +449,63 @@
       "expectations": [
         "Approved plan states that implementation runs under oversee with the requested worker",
         "Implementation proceeds under oversee with that worker without asking for the choice again or duplicating dispatch"
+      ]
+    },
+    {
+      "id": 40,
+      "name": "post-run-audit-request",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "A /oversee {worker} run earlier in this conversation finished and delivered its final report. The user now writes, with no invocation: audit the notes CLI again and list what is still untested.",
+      "expectations": [
+        "No oversee workflow, worker-choice line, or manager role; the request is handled as an ordinary request",
+        "No subagent runs with the earlier worker model or effort; any host helper keeps host defaults",
+        "Findings are reported and the fixture is unchanged"
+      ]
+    },
+    {
+      "id": 41,
+      "name": "audit-only-invocation",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: audit the notes CLI for missing tests and report the findings. Do not fix anything.",
+      "expectations": [
+        "No workers are dispatched and no subagent runs with the requested worker setting; the main agent audits itself",
+        "Findings are reported, the fixture is unchanged, and the reply mentions that /oversee can implement the fixes"
+      ]
+    },
+    {
+      "id": 42,
+      "name": "repo-map-invocation",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker}: map this repository and explain how the commands, storage, and tests fit together.",
+      "expectations": [
+        "Mapping and explanation are done by the main agent; no workers and no subagent with the requested worker setting",
+        "No fixture changes"
+      ]
+    },
+    {
+      "id": 43,
+      "name": "post-run-coding-request",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "A /oversee {worker} run earlier in this conversation finished and delivered its final report. The user now writes, with no invocation: also add a --count flag to list that prints the number of notes.",
+      "expectations": [
+        "Handled as an ordinary coding request; no oversee workflow and no workers with the earlier worker setting",
+        "A new run starts only if the user invokes the skill again or asks to hand the work to workers"
+      ]
+    },
+    {
+      "id": 44,
+      "name": "post-run-findings-then-invoke",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "After a finished /oversee {worker} run, the user asked for a fresh audit and the main agent reported findings itself. The user now writes: /oversee fix those findings.",
+      "expectations": [
+        "A new run starts on the reported findings; each actionable finding maps to a scoped implementation piece",
+        "With no worker named, the earlier run's choice may be reused and is announced in one line before dispatch",
+        "Workers only implement fixes; the manager audits and runs checks"
       ]
     }
   ]

@@ -51,7 +51,13 @@ class CatalogTests(unittest.TestCase):
     def test_planning_scope_cases_present(self):
         names = {e["name"] for e in EVALS}
         for name in ["plan-mode-task-then-invoke", "plan-mode-host-helpers", "normal-mode-task-then-invoke",
-                     "explicit-research-request", "plan-mode-explicit-research", "plan-fresh-context"]:
+                     "research-request-stays-with-manager", "plan-mode-research-request", "plan-fresh-context"]:
+            self.assertIn(name, names)
+
+    def test_implementation_only_cases_present(self):
+        names = {e["name"] for e in EVALS}
+        for name in ["post-run-audit-request", "audit-only-invocation", "repo-map-invocation",
+                     "post-run-coding-request", "post-run-findings-then-invoke"]:
             self.assertIn(name, names)
 
 
