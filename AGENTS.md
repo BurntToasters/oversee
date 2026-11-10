@@ -16,18 +16,18 @@ Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in 
 
 Owner: BurntToasters. License: MIT.
 
-## Status (2026-11-07)
+## Status (2026-11-09)
 
 | Item | State |
 |---|---|
 | Design | Mostly settled. See Decisions below |
 | `npx skills add BurntToasters/oversee -g` | Primary installer since 1.1.0. skills CLI 1.7.6 smoke-tested on macOS against a throwaway `HOME` with a local-path source: one canonical copy in `~/.agents/skills/oversee`, symlinks for Claude Code and Kiro. GitHub-source install not yet run |
 | `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Legacy installers, kept for hosts without Node. Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
-| `SKILL.md` | Explicit activation, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
+| `SKILL.md` | Explicit activation, implementation-only scope, run ends at its report, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
 | `references/harnesses.md` | Official sources rechecked 2026-10-15; Kiro CLI, Cline, and additional host coverage checked 2026-11-03; Claude Code, Codex, OpenCode v2, Cursor, Kiro rechecked 2026-11-07. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
-| `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
+| `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, and implementation-only scenarios 40-44, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
 | `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
-| `CHANGELOG.md` | Per-version change log; 1.1.0 in progress |
+| `CHANGELOG.md` | Per-version change log; 1.1.1 in progress |
 | `README.md` | Written with install, uninstall, compatibility, and usage instructions |
 
 ## Decisions
@@ -46,10 +46,10 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
    - If the user gives no answer, choose by difficulty and say which model you chose, in one line.
    - Model names are open-ended inputs, not an allowlist or fixed default. Resolve current model/version/effort, clarify ambiguity, and never silently substitute. With no named setting in noninteractive use, choose an available tool-capable worker by difficulty and relative supported effort. Examples never establish availability.
 8. **Final output.** Result only: changes, checks/outcomes, unfinished work and blockers. No plan, worker logs, or audit notes unless requested. Allow the dispatch notice and necessary handoff, clarification, blocker, and cancellation messages.
-9. **Trigger.** Explicit invocation or an explicit request for this workflow only. Quoted commands, skill reviews, and ordinary coding questions must not activate execution. Keep the portable behavioral guard; optional host controls are documented, not installed.
+9. **Trigger.** Explicit invocation or an explicit request for this workflow only. Quoted commands, skill reviews, and ordinary coding questions must not activate execution. A run ends with its final report; later turns are ordinary requests until the user invokes again. Keep the portable behavioral guard; optional host controls are documented, not installed.
 10. **Universal core.** `SKILL.md` must not depend on one harness's tool names or model IDs. Harness details go in `references/`.
 11. **Plan mode.** A ready conversation plan counts as existing work. In Plan mode the worker choice names who implements after approval, not who plans: the manager researches and plans itself, prepares briefs, records the worker choice in the plan, and uses native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers. Host planning helpers keep host defaults and never receive the worker choice. Outside Plan mode the same invocation plans and dispatches now.
-14. **Planning scope.** Agreed with the owner 2026-10-16. Planning, research, and audit are manager work in every mode. Workers research or audit only when the user explicitly asks; those workers are read-only and use the named worker choice.
+14. **Implementation-only scope.** Agreed with the owner 2026-10-16; tightened 2026-11-09. Workers only implement. Planning, research, repo mapping, review, and audit are manager work in every mode, even when the user asks for workers to do them. A read-only invocation dispatches nothing. After a run, later requests never go to the earlier workers; only a later oversee run that names no worker may reuse the choice.
 12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
 13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: keep installing to their paths and keep their harness notes, but their live verification is optional and does not block a release.
 
@@ -57,21 +57,22 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 
 - Interpret an actual invocation using the surrounding message and conversation. Natural wording such as `use <model>`, a model-only invocation, and task text before or after `/oversee` should preserve the user's intent. The host must first recognize and deliver the invocation; the skill cannot change a host's slash-command parser.
 - Reuse a ready plan, pasted audit findings, or an explicit coding task as scope. A model-only invocation uses existing work; if none exists, ask what to oversee. If a model is named without effort, choose a supported effort by difficulty, as specified in `SKILL.md`.
-- Adding `/oversee` to a ready plan or a task to plan while in Plan mode prepares oversight for implementation after host approval. The named worker is for implementation only; it never does plan research unless the user asks. Retain scope and worker selection; require neither another invocation nor duplicate dispatch after execution is enabled.
+- Adding `/oversee` to a ready plan or a task to plan while in Plan mode prepares oversight for implementation after host approval. The named worker is for implementation only; it never does plan research. Retain scope and worker selection; require neither another invocation nor duplicate dispatch after execution is enabled.
 - Outside Plan mode, `/oversee <worker>` with a task plans in the manager and dispatches implementing workers in the same run.
-- An audit-and-fix request means the manager audits first, turns actionable findings into scoped implementation pieces, then dispatches workers and verifies fixes. Resolve ambiguous findings or acceptance gaps before dispatch.
+- An audit-and-fix request means the manager audits first, turns actionable findings into scoped implementation pieces, then dispatches workers and verifies fixes. Resolve ambiguous findings or acceptance gaps before dispatch. An audit-only request dispatches nothing; the main agent audits and reports.
 - User examples illustrate intent, not an exhaustive grammar or model allowlist. Quoted examples and discussions of these forms must not activate the workflow. Keep installed behavior in `SKILL.md`; this file is repository guidance only.
 
 ## SKILL.md outline
 
-1. Explicit invocation and reuse of ready plans.
+0. When the skill applies: invocation only, implementation only, one run then done.
+1. Reading the invocation and reuse of ready plans.
 2. Plan-mode handoff before implementing dispatch; worker choice reserved for implementation, manager-only planning.
 3. Choose workers: named, asked, or chosen by difficulty.
 4. Plan, ownership, dependencies, and starting workspace snapshot.
 5. Complete worker briefs with scope, constraints, checks, and short reports.
 6. Batch dispatch within concurrency limits, then blocking waits/completion events.
 7. Audit, integration checks, complete retries, and stopping conditions.
-8. Result-only report; link the installed harness reference where needed.
+8. Result-only report, which ends the run; link the installed harness reference where needed.
 
 ## Skill file rules
 
@@ -199,7 +200,7 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - Codex smoke evidence: `../oversee-workspace/codex-smoke-1/`; recovered/graded evidence: `../oversee-workspace/codex-smoke-1-reviewed/`. Caller chose GPT-6.1 Sol medium with GPT-6 Luna max. Ordinary-question and parallel cases passed observed orchestration checks; dependent implementation passed behavior, exact settings, and native handoff, but failed silence. Original exporter missed current child-event shapes; derived review recovers them from retained native events without more model calls. Cost is unknown.
 - `npx skills add` was run once (skills 1.7.6, macOS, local-path source, throwaway `HOME`). The GitHub-source path, `skills update` after the layout move, and Windows symlink/junction behavior are untested.
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
-- Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence. Scenarios 34-39 specify planning scope (worker choice never used for plan research unless requested, host helpers keep defaults, fresh-context plan handoff); also catalog-only. The OpenCode recorder now fails plan phases where a subagent ran with the requested worker setting.
+- Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence. Scenarios 34-39 specify planning scope (worker choice never used for plan research, host helpers keep defaults, fresh-context plan handoff); also catalog-only. Scenarios 40-44 specify the 1.1.1 fix (post-run requests stay ordinary; read-only invocations dispatch nothing); catalog-only, and live checks need a multi-turn session the recorders do not drive. The OpenCode recorder now fails plan phases where a subagent ran with the requested worker setting.
 - Installer fault injection covers failure while publishing `SKILL.md` or `references/` to one target and failure of the subsequent restore, for both `install.bat` and `install.sh`. These are deterministic offline tests; they found no installer defects.
 - Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery, macOS, and WSL in the current revision. Copilot, Cline, Antigravity, and Kiro CLI live checks are optional (Decision 13); Kiro CLI and Cline are documentation-checked only, and Kiro per-subagent effort is not documented. On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
 - Default effort selection remains a relative difficulty heuristic limited to each model's supported variants. No cross-model strength ranking is claimed.

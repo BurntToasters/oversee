@@ -9,7 +9,7 @@ Checked 2026-10-15 against the linked official docs; Kiro CLI, Cline, and Antigr
 - Use native launch parameters when exposed. Inspect resolved metadata for forced inheritance or overrides; do not claim an unverified model/effort was honored.
 - Request fresh context where supported. Check worker permissions: a separate profile/session must not exceed authorized boundaries. Do not change global configuration to enable dispatch.
 - Plan-mode invocation prepares the handoff. Request a native approval/transition when exposed, otherwise state the user action. Only the host can enable execution.
-- Read-only built-ins listed below (Explore, explorer, research) serve the host's own planning or research the user explicitly requested from workers. Never pass the worker model/effort to host planning helpers; oversee implementation uses an implementing agent.
+- Read-only built-ins listed below (Explore, explorer, research) belong to the host's own planning and exploration. Oversee never dispatches them and never passes them the worker model/effort; every oversee worker is an implementing agent. A finished run's worker choice does not apply to later audit, review, or research requests.
 
 ## Invocation and activation
 
