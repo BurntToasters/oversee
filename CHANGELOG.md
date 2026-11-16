@@ -24,6 +24,8 @@ It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI cust
 
 Switching from the old scripts: `npx skills remove oversee -g` does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. Delete the six script folders (`~/.agents/skills/oversee`, `~/.claude/skills/oversee`, `~/.cline/skills/oversee`, `~/.gemini/config/skills/oversee`, `~/.gemini/antigravity-cli/skills/oversee`, `~/.kiro/skills/oversee`) by hand, then run `npx skills add`. The README has bash and PowerShell commands.
 
+Cline: the skills CLI writes Cline's copy to `~/.agents/skills`, but Cline reads global skills from `~/.cline/skills`. Link `~/.agents/skills/oversee` there after installing; the README has the commands.
+
 ## 1.2.0 (unreleased)
 
 ### Removed
@@ -35,7 +37,8 @@ Switching from the old scripts: `npx skills remove oversee -g` does not know abo
 - The single harness reference is split into one file per host under `references/` (`claude-code.md`, `codex.md`, `opencode.md`, `cursor.md`, `copilot.md`, `antigravity.md`, `cline.md`, `kiro.md`, `headless.md`). A run opens only its host's file instead of notes for every host.
 - `SKILL.md` context-economy rules: a ready plan is not re-explored; the baseline is compact (commit id or path list with hashes, no full diffs, no snapshot left behind); briefs give start pointers and piece-scoped checks, and workers return fixed `Changed`/`Checks`/`Unfinished`/`Uncertain` reports; the manager waits for the whole current batch without text, audits from a whole-workspace path list and real diffs, and runs checks quietly with one check per command and no pipes. Silence is stated structurally: between the worker-choice line and the report, turns contain tool calls only. Three rules from the old reference moved into `SKILL.md`: an unsupported `max` is not the highest level, an unverified setting is never claimed as honored, and global configuration is never changed to enable dispatch.
 - Corrected host facts: OpenCode v2 has an optional per-call `model` (`provider/model#variant`) and, in v2.3.0, always runs subagents in the background with a completion notice; Claude Code interactive sessions cannot block on workers, and a finished worker can be resumed with its history.
-- Eval recorders write `usage_by_role` (manager, children, manager turns) beside the unchanged `usage`, so manager cost can be compared before and after. Chained inspection commands such as `git status --short && git diff` now count as reading the diff.
+- README: Cline users link `~/.agents/skills/oversee` into `~/.cline/skills`, because the skills CLI installs Cline's copy where Cline's docs do not look. The PowerShell migration command removes symlinks and junctions as links instead of recursing into their targets.
+- Eval recorders write `usage_by_role` (manager, children, manager turns) beside the unchanged `usage`, so manager cost can be compared before and after. Chained inspection commands such as `git status --short && git diff` now count as reading the diff; a `git diff` inside a quoted string does not.
 
 ### Added
 

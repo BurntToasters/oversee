@@ -12,7 +12,7 @@ The README premise: a larger model oversees other subagents without micromanagin
 
 The intended setup is a higher-tier model as manager (for example Claude Opus 5.5 or GPT-6.1 Sol) and cheaper workers as subagents (for example Claude Haiku 5.5 or GPT-6 Luna). The manager plans and audits. The workers implement. The main goal is fewer tokens, so the manager never polls workers.
 
-Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in these. GitHub Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI places the skill for them and their harness notes stay, but do not block releases on them (see Decision 13).
+Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in these. GitHub Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI installs the skill for them (Cline needs a link into `~/.cline/skills`, see README) and their harness notes stay, but do not block releases on them (see Decision 13).
 
 Owner: BurntToasters. License: MIT.
 
@@ -31,7 +31,7 @@ Owner: BurntToasters. License: MIT.
 
 ## Decisions
 
-Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only with the owner. Decision 13 was reworded 2026-11-16 after the owner ordered the install scripts removed.
+Items 1 to 5, 7 to 8, 13, 14, and 15 were agreed with the owner. Change them only with the owner. Decision 13 was reworded 2026-11-16 after the owner ordered the install scripts removed.
 
 1. **Invocation.** `/oversee <task>` starts a run. `/oversee` alone oversees work already in progress in the conversation. If nothing is in progress, ask what to oversee.
 2. **Scope.** Coding first. Acceptance means tests, builds, or diffs that can be checked. Non-code work is out of scope for v1.
@@ -50,8 +50,8 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 11. **Plan mode.** A ready conversation plan counts as existing work. In Plan mode the worker choice names who implements after approval, not who plans: the manager researches and plans itself, prepares briefs, records the worker choice in the plan, and uses native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers. Host planning helpers keep host defaults and never receive the worker choice. Outside Plan mode the same invocation plans and dispatches now.
 14. **Implementation-only scope.** Agreed with the owner 2026-10-16; tightened 2026-11-09. Workers only implement. Planning, research, repo mapping, review, and audit are manager work in every mode, even when the user asks for workers to do them. A read-only invocation dispatches nothing. After a run, later requests never go to the earlier workers; only a later oversee run that names no worker may reuse the choice.
 12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
-13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI places the skill for them and their harness notes stay in `references/`, but their live verification is optional and does not block a release.
-15. **Manager context economy.** Added in 1.2.0 (2026-11-16). The manager's context is re-read every turn, so it opens only its host's reference, does not re-explore a ready plan, and keeps a compact baseline (commit id or paths plus hashes; no full diffs; no snapshot files left in or after the run). Briefs carry start pointers and piece-scoped checks; workers return `Changed`/`Checks`/`Unfinished`/`Uncertain`. The manager waits for the whole current batch with no text, audits from a whole-workspace path list and real diffs, and runs quiet checks one per command with no pipes. Between the worker-choice line and the report, manager turns are tool calls only. Decisions 4, 5, 8, 12, and 14 are unchanged.
+13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI installs the skill for them (Cline needs a link into `~/.cline/skills`, see README) and their harness notes stay in `references/`, but their live verification is optional and does not block a release.
+15. **Manager context economy.** Agreed with the owner 2026-11-16 for 1.2.0. The manager's context is re-read every turn, so it opens only its host's reference, does not re-explore a ready plan, and keeps a compact baseline (commit id or paths plus hashes; no full diffs; no snapshot files left in or after the run). Briefs carry start pointers and piece-scoped checks; workers return `Changed`/`Checks`/`Unfinished`/`Uncertain`. The manager waits for the whole current batch with no text, audits from a whole-workspace path list and real diffs, and runs quiet checks one per command with no pipes. Between the worker-choice line and the report, manager turns are tool calls only. Decisions 4, 5, 8, 12, and 14 are unchanged.
 
 ## Invocation wording
 
@@ -86,7 +86,7 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 
 ## Install layout
 
-Primary: `npx skills add BurntToasters/oversee -g` (skills CLI by Vercel Labs, Node 22.20+). It discovers `skills/oversee/SKILL.md`, writes one canonical copy to `~/.agents/skills/oversee`, and symlinks or copies into the folders of detected agents (`-a <agent>` selects, `--copy` avoids symlinks, `-y` skips prompts). `npx skills update`, `check`, and `remove` manage it; `DISABLE_TELEMETRY=1` opts out of its telemetry. The CLI's global paths differ from the cross-agent folder for some hosts (OpenCode `~/.config/opencode/skills`, Cursor `~/.cursor/skills`, Copilot `~/.copilot/skills`); those hosts also read `~/.agents/skills`.
+Primary: `npx skills add BurntToasters/oversee -g` (skills CLI by Vercel Labs, Node 22.20+). It discovers `skills/oversee/SKILL.md`, writes one canonical copy to `~/.agents/skills/oversee`, and symlinks or copies into the folders of detected agents (`-a <agent>` selects, `--copy` avoids symlinks, `-y` skips prompts). `npx skills update`, `check`, and `remove` manage it; `DISABLE_TELEMETRY=1` opts out of its telemetry. The CLI's global paths differ from the cross-agent folder for some hosts (OpenCode `~/.config/opencode/skills`, Cursor `~/.cursor/skills`, Copilot `~/.copilot/skills`); those hosts also read `~/.agents/skills`. Cline is the exception the other way: the CLI writes its copy to `~/.agents/skills`, but Cline's docs list only `~/.cline/skills` globally, so the README tells Cline users to link it (CLI `src/agents.ts` and Cline `docs/customization/skills.mdx`, checked 2026-11-16).
 
 Many other hosts read `~/.agents/skills/oversee` and need no separate target; the list, the per-host folder table, and the migration note for people who used the removed scripts (six folders, two of which `npx skills remove` does not know) are in the README.
 

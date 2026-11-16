@@ -30,7 +30,7 @@ Where each host reads the skill (global folders; several hosts read more than on
 | Antigravity CLI (additional path) | `~/.gemini/antigravity-cli/skills/oversee` |
 | Kiro CLI 2.x and V3 | `~/.kiro/skills/oversee` |
 
-Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Cline, Antigravity, and Kiro CLI are supported on a best-effort basis: the skills CLI places the skill where they read it, and their harness notes are kept, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`) for native subagents; exact model and effort require its headless CLI. Kiro CLI 2.x and V3 share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
+Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Cline, Antigravity, and Kiro CLI are supported on a best-effort basis: the skills CLI places the skill where they read it (except Cline, see [Cline](#cline)), and their harness notes are kept, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`) for native subagents; exact model and effort require its headless CLI. Kiro CLI 2.x and V3 share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
 
 Many other hosts read the same `~/.agents/skills/oversee` path and are covered by that entry, including Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
 
@@ -58,9 +58,22 @@ npx skills remove oversee -g                                         # uninstall
 
 It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` is set. Review any skill before use; it runs with your agent's permissions.
 
+### Cline
+
+The skills CLI writes Cline's copy to `~/.agents/skills`, but Cline's docs list only `~/.cline/skills` for global skills. After installing, link the skill there so `npx skills update` keeps it current. `npx skills remove` does not remove this link; delete it yourself.
+
+```bash
+mkdir -p ~/.cline/skills && ln -s ~/.agents/skills/oversee ~/.cline/skills/oversee
+```
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.cline\skills" | Out-Null
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.cline\skills\oversee" -Target "$env:USERPROFILE\.agents\skills\oversee"
+```
+
 ### Migrating from the old install scripts
 
-The bundled install scripts were removed in 1.2.0. The skills CLI's global paths are Claude Code `~/.claude/skills`, Codex and Cline `~/.agents/skills`, Cursor `~/.cursor/skills`, OpenCode `~/.config/opencode/skills`, Copilot `~/.copilot/skills`, Antigravity `~/.gemini/config/skills`, and Kiro CLI `~/.kiro/skills`. `npx skills remove oversee -g` deletes a named skill folder from the agent folders it targets even if another installer put it there, but it does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. If you installed with the scripts, remove all six of their folders by hand, then install with the skills CLI.
+The bundled install scripts were removed in 1.2.0. The skills CLI's global paths are Claude Code `~/.claude/skills`, Codex and Cline `~/.agents/skills`, Cursor `~/.cursor/skills`, OpenCode `~/.config/opencode/skills`, Copilot `~/.copilot/skills`, Antigravity `~/.gemini/config/skills`, and Kiro CLI `~/.kiro/skills`. `npx skills remove oversee -g` deletes a named skill folder from the agent folders it targets even if another installer put it there, but it does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. If you installed with the scripts, remove all six of their folders by hand, install with the skills CLI, then add the [Cline](#cline) link if you use Cline.
 
 Bash (macOS, Linux, WSL, Git Bash):
 
@@ -70,17 +83,16 @@ rm -rf ~/.agents/skills/oversee ~/.claude/skills/oversee ~/.cline/skills/oversee
 npx skills add BurntToasters/oversee -g
 ```
 
-PowerShell (Windows):
+PowerShell (Windows; untested):
 
 ```powershell
 '.agents\skills', '.claude\skills', '.cline\skills', '.gemini\config\skills', '.gemini\antigravity-cli\skills', '.kiro\skills' |
-  ForEach-Object { Join-Path $env:USERPROFILE "$_\oversee" } |
-  Where-Object { Test-Path $_ } |
-  ForEach-Object { Remove-Item -Recurse -Force $_ }
+  ForEach-Object { Get-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:USERPROFILE "$_\oversee") } |
+  ForEach-Object { if ($_.LinkType) { $_.Delete() } else { Remove-Item -Recurse -Force $_.FullName } }
 npx skills add BurntToasters/oversee -g
 ```
 
-These commands delete only folders named `oversee`; other skills are untouched.
+These commands delete only folders named `oversee`; other skills are untouched. A symlink or junction is removed as a link, so its target's contents are not touched.
 
 ## Uninstall
 

@@ -101,6 +101,10 @@ class EvidenceTests(unittest.TestCase):
         self.assertTrue(inspects_diff("git status --short\ngit diff"))
         self.assertFalse(inspects_diff("git status --short && git diff --stat"))
         self.assertFalse(inspects_diff("echo git diff"))
+        self.assertFalse(inspects_diff('python -c "x=1; git diff"'))
+        self.assertFalse(inspects_diff("sh -c 'true && git diff'"))
+        self.assertTrue(inspects_diff("git status --short || git diff"))
+        self.assertTrue(inspects_diff("git diff -- 'my file.py'"))
         root, child = transcript(), transcript("child", "root", created=2, idle=4)
         root["messages"][0]["content"] = [{"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
             "status": "completed", "input": {"command": "git status --short && git diff"}, "metadata": {"exit": 0}}}]

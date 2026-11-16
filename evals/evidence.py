@@ -42,9 +42,10 @@ def usage_by_role(transcripts):
 
 def inspects_diff(command):
     """True when any segment of a chained command is a content diff, not a stat or name list."""
+    unquoted = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
     return any(re.match(r"\s*git\s+diff\b", segment) and
                not re.search(r"--(?:stat|name-only|name-status)\b", segment)
-               for segment in re.split(r"&&|;|\n", command))
+               for segment in re.split(r"&&|\|\||;|\n", unquoted))
 
 
 def tools(transcript):
