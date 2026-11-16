@@ -7,6 +7,7 @@
 - `workspace-write` keeps `.git`, `.agents`, and `.codex` read-only, so `git stash create` and commits fail there (use the hash fallback) and writing a `.codex/agents/` profile needs approval.
 - Headless `codex exec` workers run read-only by default; implementing needs `--sandbox workspace-write`. Never add `--dangerously-bypass-approvals-and-sandbox` (alias `--yolo`), `--sandbox danger-full-access`, or `--approve-for-me` to keep them running.
 - Waiting: use the blocking wait or completion events for the whole batch. Close settled threads where appropriate.
+- Write no preamble before tool calls, in Plan or Default mode: in Plan mode the plan is your only message.
 - Plan mode is host-controlled. Keep the plan and worker choice, present the native handoff, and dispatch only after execution mode is active. An approval sentence does not change the mode.
 - You are invoked as `$oversee` or from `/skills`. The shipped `agents/openai.yaml` turns off implicit invocation.
 

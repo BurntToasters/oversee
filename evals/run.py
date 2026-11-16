@@ -222,6 +222,9 @@ def snapshot(directory, *, legacy=False):
 
 # Baseline commands the skill asks the manager to run; exact prefixes, no broader git access.
 BASELINE_COMMANDS = ["git rev-parse*", "git log*", "git stash create*", "git hash-object*"]
+# Test runs and the notes CLI only; a bare `python *` would also admit `python -c <code>`.
+PYTHON_COMMANDS = [f"{python}{flags} {target}*" for python in ("python", "python3")
+                   for flags in ("", " -B") for target in ("-m unittest", "notes.py")]
 
 
 def init_repo(project):
@@ -247,7 +250,7 @@ def fixture(output, case, with_skill):
              for action in ["external_directory", "webfetch", "websearch", "shell"]]
     rules += [{"action": "shell", "resource": command, "effect": "allow"}
               # `git -C <path> diff` is not allowed: a mid-pattern wildcard could admit write commands.
-              for command in ["python *", "python3 *", "git status*", "git diff*", "git --no-pager diff*",
+              for command in [*PYTHON_COMMANDS, "git status*", "git diff*", "git --no-pager diff*",
                               "git ls-files*", *BASELINE_COMMANDS]]
     config = {"$schema": "https://opencode.ai/config.json", "permissions": rules,
               "agents": {"general": {"permissions": rules}, "build": {"permissions": rules}}}

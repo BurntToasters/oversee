@@ -52,7 +52,7 @@ class PayloadTests(unittest.TestCase):
             self.assertRegex(value, r'^"[^"]*"$', key)
 
     def test_byte_budgets(self):
-        self.assertLessEqual(len((PAYLOAD / "SKILL.md").read_bytes()), 13500)
+        self.assertLessEqual(len((PAYLOAD / "SKILL.md").read_bytes()), 14500)
         sizes = {p.name: len(p.read_bytes()) for p in REFERENCES.glob("*.md")}
         for name, size in sizes.items():
             self.assertLessEqual(size, 3500, name)

@@ -38,6 +38,10 @@ class FixtureTests(unittest.TestCase):
                    if r["effect"] == "allow"}
         self.assertLessEqual(set(run.BASELINE_COMMANDS), allowed)
         self.assertNotIn("git stash*", allowed)
+        # Python is allowed for tests and the notes CLI only, never arbitrary `python -c` code.
+        self.assertLessEqual(set(run.PYTHON_COMMANDS), allowed)
+        self.assertFalse({"python *", "python3 *"} & allowed)
+        self.assertTrue(all("unittest" in rule or "notes.py" in rule for rule in allowed if rule.startswith("python")))
 
     def test_codex_stage_is_committed(self):
         project, skill_md = stage(self.output, CASE)

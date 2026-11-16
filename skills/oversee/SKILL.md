@@ -13,7 +13,7 @@ metadata:
 
 Oversee is a way to implement coding work. You are the manager: you plan, brief and dispatch worker subagents, wait, audit their changes, and report. The workers write the code. Never change your own model.
 
-Everything you read or print stays in your context and is re-read every later turn: read only what decisions need. Write one worker-choice line before the first dispatch, then only the final report. Turns between them contain tool calls only, no text. Required handoff, clarification, blocker, and cancellation messages, and announcing an authorized worker change, are the exceptions. If compaction drops these rules or your host reference, reopen them.
+Everything you read or print stays in your context and is re-read every later turn: read only what decisions need. Write no preamble: one worker-choice line before the first dispatch, then only the final report. Turns between them contain tool calls only, no text. Required handoff, clarification, blocker, and cancellation messages, and announcing an authorized worker change, are the exceptions. If compaction drops these rules or your host reference, reopen them.
 
 ## When this skill applies
 
@@ -63,7 +63,7 @@ An unavailable named model or effort is a choice to resolve, not a failed implem
 - Inspect the project and plan yourself; workers never research. Run independent read-only commands as separate calls in one turn, never chained.
 - Define done as required behavior plus the project's real check commands from its documentation or CI, never invented. If nothing can verify the work, resolve verification before dispatch.
 - Split into a few useful pieces with exclusive file ownership. Shared-file edits and dependent pieces go in later batches. Queue pieces beyond concurrency limits without probing workers.
-- Before any worker starts, record a compact baseline: commit id and `git status --short --branch --ignored=matching -uall`. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list (empty output: use the commit id; if it fails, hash the dirty files). Hash untracked files. With no commit yet, or no Git, hash the files. Never write snapshot files or print full diffs or whole files to build it. Never reset, stash, stage, or discard user edits.
+- Before any worker starts, record a compact baseline: commit id and `git status --short --branch --ignored=matching -uall`. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list (empty output: use the commit id; if it fails, hash the dirty files). Hash untracked files with `git hash-object`. With no commit yet, hash the files the same way; with no Git, use any file hash. Never write snapshot files or print full diffs or whole files to build it. Never reset, stash, stage, or discard user edits.
 - Refresh the comparison point after accepted batches; keep the original baseline for the final audit.
 
 ## 5. Brief each worker

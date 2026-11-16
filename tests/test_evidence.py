@@ -53,6 +53,19 @@ class EvidenceTests(unittest.TestCase):
         calls[-1]["state"]["metadata"]["exit"] = 0
         self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
 
+    def test_missing_interpreter_is_not_a_failed_check(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        missing = {"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"command": "python -m unittest"}, "output": "zsh:1: command not found: python",
+            "metadata": {"exit": 127}}}
+        working = {"type": "tool", "name": "shell", "time": {"created": 6}, "state": {
+            "status": "completed", "input": {"command": "python3 -m unittest"}, "metadata": {"exit": 0}}}
+        root["messages"][0]["content"] = [missing, working]
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+        # With no working run, nothing establishes that the checks passed.
+        root["messages"][0]["content"] = [missing]
+        self.assertIsNone(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+
     def test_usage_deduplicates_sessions_not_messages(self):
         root, child = transcript(), transcript("child", "root")
         root["messages"] = [{"type": "assistant", "cost": 999, "tokens": {"input": 999}}]

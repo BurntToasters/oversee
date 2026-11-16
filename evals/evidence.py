@@ -48,6 +48,11 @@ def is_check_command(command):
     return bool(_CHECK.match(flat))
 
 
+def interpreter_missing(code, output):
+    """The shell could not start the command (for example `python` absent on macOS); no test ran."""
+    return code in (127, 9009) or bool(re.search(r"command not found|is not recognized as", str(output or ""), re.I))
+
+
 def mentions(text, token):
     """Whole-token, case-insensitive mention of a model id or effort."""
     return bool(token) and re.search(r"(?<![\w.-])" + re.escape(token) + r"(?![\w-]|\.\w)", text, re.I) is not None
@@ -199,6 +204,12 @@ def plan_phase_checks(transcripts, unchanged, worker, manager, root_id=None):
             "no_worker_choice_in_plan": None if worker == manager else not any(uses(t) for t in children)}
 
 
+def _missing(tool):
+    state = tool.get("state", {})
+    metadata = state.get("metadata", {})
+    return interpreter_missing(metadata.get("exit"), str(state.get("output") or "") + str(metadata.get("output") or ""))
+
+
 def _read_path(tool):
     data = tool.get("state", {}).get("input", {})
     path = next((data[k] for k in ("filePath", "file_path", "path") if isinstance(data.get(k), str)), "")
@@ -287,7 +298,8 @@ def grade(transcripts, case, with_skill, worker, phase=None, root_id=None, chang
                     if t.get("name", "").lower() in ("shell", "bash", "powershell")]
         checks["manager_runs_checks_after_workers"] = any(is_check_command(s) for s in commands)
         test_calls = [t for t in post if t.get("name", "").lower() in ("shell", "bash", "powershell")
-                      and is_check_command(t.get("state", {}).get("input", {}).get("command", ""))]
+                      and is_check_command(t.get("state", {}).get("input", {}).get("command", ""))
+                      and not _missing(t)]
         # A completed shell tool can still contain a failed test process.
         latest_checks = {t["state"]["input"]["command"]: t["state"].get("metadata", {}).get("exit") for t in test_calls}
         exits = list(latest_checks.values())
@@ -330,7 +342,7 @@ def grade(transcripts, case, with_skill, worker, phase=None, root_id=None, chang
                 start, end = windows[0][1], windows[1][0]
                 shell = lambda t: t.get("name", "").lower() in ("shell", "bash", "powershell")
                 tests_between, tests_unknown, tests_late = completed_between(calls, start, end, lambda t: shell(t) and
-                    is_check_command(t.get("state", {}).get("input", {}).get("command", "")))
+                    is_check_command(t.get("state", {}).get("input", {}).get("command", "")) and not _missing(t))
                 latest_between = {}
                 for tool in sorted(tests_between, key=lambda t: t.get("time", {}).get("completed", float("-inf"))):
                     latest_between[tool["state"]["input"]["command"]] = tool

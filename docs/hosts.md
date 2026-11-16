@@ -79,7 +79,7 @@ Checked 2026-10-15 unless noted; source dates in retained evidence remain histor
 - Claude Code sandboxing (`.git` writability) and sub-agents (`SendMessage`, `isolation`, `name` with agent teams), checked 2026-11-16: https://code.claude.com/docs/en/sandboxing and https://code.claude.com/docs/en/sub-agents
 - Cursor subagent nesting (two levels since 2.5), checked 2026-11-16: https://cursor.com/docs/subagents
 - skills CLI `check` exit status (docs/commands.md, 1.8.1), checked 2026-11-16: https://github.com/vercel-labs/skills/blob/main/docs/commands.md
-- Claude Code `Agent` `run_in_background` (live `claude -p` 2.1.325 tool schema) and the no-visible-output prompt (2.1.325 binary; not in the docs), checked 2026-11-16
+- Claude Code `Agent` `run_in_background` (live `claude -p` 2.1.325 tool schema: present by default and with `CLAUDE_CODE_FORK_SUBAGENT=0`, absent with `=1`) and the no-visible-output prompt (2.1.325 binary; not in the docs), checked 2026-11-16
 - Cline CLI approval default (`cline --help` text in the docs), checked 2026-11-16: https://docs.cline.bot/cli
 - Copilot CLI built-in agents, checked 2026-11-16: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-custom-agents
 

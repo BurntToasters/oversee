@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from .codex_run import Codex, export
-from .evidence import inspects_diff, is_check_command, mentions
+from .evidence import inspects_diff, interpreter_missing, is_check_command, mentions
 from .run import ROOT, correctness, snapshot, write_json
 
 HELPER_TYPES = {"explorer"}
@@ -93,7 +93,8 @@ def _latest_checks(items):
     checks = {}
     for item in items:
         command = item.get("command", "")
-        if _unittest_invocation(command):
+        # A command the shell could not start ran no test; a later working form decides.
+        if _unittest_invocation(command) and not interpreter_missing(item.get("exitCode"), item.get("aggregatedOutput")):
             checks[command] = item
     if not checks:
         return False

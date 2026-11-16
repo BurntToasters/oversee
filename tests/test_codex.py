@@ -196,6 +196,18 @@ class CodexTests(unittest.TestCase):
         events.insert(-2, item_event(6.7, audit_item("python -m unittest tests.test_left", 0, unittest_output())))
         self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
 
+    def test_missing_interpreter_is_not_a_failed_check(self):
+        records, meta = orchestration_records()
+        events = parallel_events(left_code=0)
+        # `python` absent (macOS): the shell ran no test, so a later `python3` result decides.
+        events.insert(5, item_event(4.5, audit_item("python -m unittest tests.test_left", 127,
+                                                    "zsh:1: command not found: python\n", status="failed")))
+        self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
+        only_missing = [e for e in parallel_events(left_code=0)
+                        if "unittest" not in str(e["message"].get("params", {}).get("item", {}).get("command", ""))]
+        only_missing.insert(5, item_event(4.5, audit_item("python -m unittest discover", 127, "", status="failed")))
+        self.assertFalse(grade(only_missing, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
+
     def test_missing_codex_test_exit_code_stays_unknown(self):
         records, meta = orchestration_records()
         events = parallel_events(left_code=None)
