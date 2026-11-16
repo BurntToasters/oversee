@@ -2,10 +2,83 @@
 
 import re
 
+FIELDS = ("input", "output", "reasoning", "cache_read", "cache_write", "cost_usd")
+# Host helper agents (OpenCode v1/v2); every other child agent is a worker.
+HELPER_AGENTS = {"explore", "plan", "scout"}
+_QUOTED = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
+_WRAPPERS = (
+    re.compile(r"""\s*(?:"[^"]*(?:powershell|pwsh)(?:\.exe)?"|'[^']*(?:powershell|pwsh)(?:\.exe)?'|"""
+               r"""(?:\S*[/\\])?(?:powershell|pwsh)(?:\.exe)?)\s+(?:-NoProfile\s+)?-Command\s+(['"])""", re.I),
+    re.compile(r"""\s*(?:/\S*/)?(?:bash|sh|zsh)\s+-l?c\s+(['"])"""))
+_CHECK = re.compile(r"^(?:\S*[/\\])?(?:python(?:3(?:\.\d+)?)?|py)(?:\.exe)?"
+                    r"(?:\s+(?:-[XW]\s*\S+|-[bBdEiIOqsSuvR]+))*\s+-m\s+unittest(?=\s|$)", re.I)
+_GIT_DIFF = re.compile(r"\s*git(?:\.exe)?(?:\s+(?:--no-pager|-P|--paginate|-p|--no-optional-locks|"
+                       r"--literal-pathspecs|--no-replace-objects|-[Cc]\s+\S+|--(?:git-dir|work-tree)(?:=|\s+)\S+))*"
+                       r"\s+diff(?=\s|$)")
+_NO_CONTENT = re.compile(r"\s--(?:stat|shortstat|numstat|dirstat|summary|name-only|name-status|quiet|"
+                         r"exit-code|no-patch)\b|\s-s(?=\s|$)")
+
+
+def _blank_quotes(command):
+    return _QUOTED.sub("''", command)
+
+
+def unwrap_shell(command):
+    """Return the body of a PowerShell -Command or POSIX `sh -c`/`-lc` wrapper, else the command."""
+    for pattern in _WRAPPERS:
+        match = pattern.match(command)
+        if not match:
+            continue
+        quote, body = match.group(1), command[match.end():].rstrip()
+        if not body.endswith(quote):
+            return command
+        body = body[:-1]
+        # A quote inside the body means text outside the wrapper; leave it wrapped.
+        if (quote == "'" and "'" in body) or (quote == '"' and re.search(r'(?<!\\)"', body)):
+            return command
+        return body
+    return command
+
+
+def is_check_command(command):
+    """One unittest run per command: no pipes, chains, or redirection outside quotes."""
+    flat = _blank_quotes(unwrap_shell(str(command or "")).strip())
+    if re.search(r"[|;&<>\n\r`]|\$\(", flat):
+        return False
+    return bool(_CHECK.match(flat))
+
+
+def mentions(text, token):
+    """Whole-token, case-insensitive mention of a model id or effort."""
+    return bool(token) and re.search(r"(?<![\w.-])" + re.escape(token) + r"(?![\w-]|\.\w)", text, re.I) is not None
+
+
+def changed_paths(before, after):
+    if before is None or after is None:
+        return None
+    return {p for p in set(before) | set(after) if before.get(p) != after.get(p)}
+
+
+def _root_id(transcripts, root_id=None):
+    ids = [t["info"]["id"] for t in transcripts]
+    if root_id in ids:
+        return root_id
+    # Old evidence lacks a stored root: use the first parentless, else first, transcript.
+    return next((t["info"]["id"] for t in transcripts if not t["info"].get("parentID")), ids[0] if ids else None)
+
+
+def root_transcript(transcripts, root_id=None):
+    rid = _root_id(transcripts, root_id)
+    return next((t for t in transcripts if t["info"]["id"] == rid), None)
+
+
+def is_helper(transcript):
+    return transcript["info"].get("agent") in HELPER_AGENTS
+
 
 def total_usage(transcripts):
     sessions = {t["info"]["id"]: t for t in transcripts}
-    fields = ("input", "output", "reasoning", "cache_read", "cache_write", "cost_usd")
+    fields = FIELDS
     totals = dict.fromkeys(fields, 0)
     for transcript in sessions.values():
         info = transcript["info"]
@@ -26,26 +99,27 @@ def total_usage(transcripts):
     return {"sessions": len(sessions), **totals}
 
 
-def usage_by_role(transcripts):
-    """Split total_usage by session: the root session is the manager, every other session a child."""
+def usage_by_role(transcripts, root_id=None):
+    """Split total_usage: root session is the manager; children split into workers and host helpers."""
     if not transcripts:
-        return {"manager": total_usage([]), "children": total_usage([]), "manager_turns": None}
-    root_id = transcripts[0]["info"]["id"]
+        empty = total_usage([])
+        return {"manager": empty, "children": empty, "workers": empty, "helpers": empty, "manager_turns": None}
+    root_id = _root_id(transcripts, root_id)
     roots = [t for t in transcripts if t["info"]["id"] == root_id]
     others = [t for t in transcripts if t["info"]["id"] != root_id]
-    children = total_usage(others) if others else {"sessions": 0, **dict.fromkeys(
-        ("input", "output", "reasoning", "cache_read", "cache_write", "cost_usd"), 0)}
+    group = lambda items: total_usage(items) if items else {"sessions": 0, **dict.fromkeys(FIELDS, 0)}
     # total_usage keeps the last transcript for a duplicated session id; count turns from the same one.
     turns = sum(1 for m in roots[-1]["messages"] if m.get("type") == "assistant" and "tokens" in m)
-    return {"manager": total_usage(roots), "children": children, "manager_turns": turns or None}
+    return {"manager": total_usage(roots), "children": group(others),
+            "workers": group([t for t in others if not is_helper(t)]),
+            "helpers": group([t for t in others if is_helper(t)]), "manager_turns": turns or None}
 
 
 def inspects_diff(command):
-    """True when any segment of a chained command is a content diff, not a stat or name list."""
-    unquoted = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
-    return any(re.match(r"\s*git\s+diff\b", segment) and
-               not re.search(r"--(?:stat|name-only|name-status)\b", segment)
-               for segment in re.split(r"&&|\|\||;|\n", unquoted))
+    """True when a segment of a (possibly wrapped) chain is a content diff not piped or redirected."""
+    flat = _blank_quotes(unwrap_shell(str(command or "")))
+    return any(_GIT_DIFF.match(segment) and not re.search(r"[|<>]", segment) and not _NO_CONTENT.search(segment)
+               for segment in re.split(r"&&|\|\||;|\n", flat))
 
 
 def tools(transcript):
@@ -114,23 +188,69 @@ def skill_loaded(transcript):
         "oversee" in str(t.get("state", {}).get("input", {})) for t in tools(transcript))
 
 
-def plan_phase_checks(transcripts, unchanged, worker, manager):
-    children = transcripts[1:]
+def plan_phase_checks(transcripts, unchanged, worker, manager, root_id=None):
+    rid = _root_id(transcripts, root_id) if transcripts else None
+    children = [t for t in transcripts if t["info"]["id"] != rid]
     uses = lambda t: t["info"].get("model") == worker or any(
         m.get("model") == worker for m in t.get("messages", []) if m.get("type") == "assistant")
     # Host planning helpers may explore, but the worker choice is reserved for implementation.
     return {"unchanged": unchanged,
-            "no_implementation_workers": not any(t["info"].get("agent") != "explore" for t in children),
+            "no_implementation_workers": not any(not is_helper(t) for t in children),
             "no_worker_choice_in_plan": None if worker == manager else not any(uses(t) for t in children)}
 
 
-def grade(transcripts, case, with_skill, worker, phase=None):
+def _read_path(tool):
+    data = tool.get("state", {}).get("input", {})
+    path = next((data[k] for k in ("filePath", "file_path", "path") if isinstance(data.get(k), str)), "")
+    return path.replace("\\", "/")
+
+
+def silence(root, worker, last_idle=None):
+    """Narration check: per user turn only the last text (after that turn's last tool) is exempt,
+    plus one single-line worker-choice notice; the run's final text must also follow the last idle."""
+    turns, current = [], []
+    for message in root.get("messages", []):
+        if message.get("type") == "user":
+            turns.append(current)
+            current = []
+        elif message.get("type") == "assistant":
+            current.append(message)
+    turns.append(current)
+    turns = [t for t in turns if t]
+    narration, notices, final_ok = [], 0, False
+    for number, turn in enumerate(turns):
+        parts = [(i, p) for i, m in enumerate(turn) for p in m.get("content", [])]
+        texts = [k for k, (_, p) in enumerate(parts) if p.get("type") == "text" and p.get("text")]
+        end = None
+        if texts and not any(p.get("type") == "tool" for _, p in parts[texts[-1] + 1:]):
+            end = parts[texts[-1]][0]
+        if end is not None and number == len(turns) - 1:
+            created = turn[end].get("time", {}).get("created")
+            if last_idle is not None and created is not None and created < last_idle:
+                end = None
+            final_ok = end is not None
+        for i, message in enumerate(turn):
+            text = "\n".join(p.get("text", "") for p in message.get("content", []) if p.get("type") == "text")
+            if i == end or not text:
+                continue
+            # Blocker/clarification text is exempt only as a turn end (awaiting the user), handled above.
+            if (mentions(text, worker["id"]) and mentions(text, worker["variant"])
+                    and len(text.splitlines()) == 1 and notices == 0):
+                notices += 1
+                continue
+            narration.append(text)
+    return not narration and final_ok
+
+
+def grade(transcripts, case, with_skill, worker, phase=None, root_id=None, changed=None):
     if not transcripts:
         return {"verified": False, "checks": {"native_transcript": None}}
-    root, *children = transcripts
+    rid = _root_id(transcripts, root_id)
+    root = root_transcript(transcripts, rid)
+    children = [t for t in transcripts if t["info"]["id"] != rid]
     calls = list(tools(root))
     checks = {"native_transcript": True}
-    worker_calls = [t for t in children if t["info"].get("agent") != "explore"]
+    worker_calls = [t for t in children if not is_helper(t)]
     if case == "explain":
         explanation = text_content(root).lower()
         checks.update(no_workers=not children,
@@ -158,24 +278,25 @@ def grade(transcripts, case, with_skill, worker, phase=None):
             if announced:
                 break
         checks["announcement_before_dispatch"] = announced
-        finished = max((t["info"]["time"].get("idle", float("inf")) for t in worker_calls), default=float("inf"))
+        finished = max((float("inf") if t["info"]["time"].get("idle") is None else t["info"]["time"]["idle"]
+                        for t in worker_calls), default=float("inf"))
         post = [t for t in calls if t.get("time", {}).get("created", 0) >= finished
                 and t.get("state", {}).get("status") == "completed"]
         # Read tool INPUT, not prose claiming checks ran. execute can contain nested shell calls.
         commands = [t.get("state", {}).get("input", {}).get("command", "") for t in post
                     if t.get("name", "").lower() in ("shell", "bash", "powershell")]
-        checks["manager_runs_checks_after_workers"] = any(
-            re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b", s) for s in commands)
+        checks["manager_runs_checks_after_workers"] = any(is_check_command(s) for s in commands)
         test_calls = [t for t in post if t.get("name", "").lower() in ("shell", "bash", "powershell")
-                      and re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b",
-                                   t.get("state", {}).get("input", {}).get("command", ""))]
+                      and is_check_command(t.get("state", {}).get("input", {}).get("command", ""))]
         # A completed shell tool can still contain a failed test process.
         latest_checks = {t["state"]["input"]["command"]: t["state"].get("metadata", {}).get("exit") for t in test_calls}
         exits = list(latest_checks.values())
         checks["manager_checks_succeeded"] = (False if any(code is not None and code != 0 for code in exits)
             else None if not exits or any(code is None for code in exits) else True)
+        # A read counts only for a path that actually changed (unknown baseline: reads never count).
         checks["manager_inspects_changes"] = any(inspects_diff(s) for s in commands) or any(
-            t.get("name") in ("read", "read_file") and ".py" in str(t.get("state", {}).get("input", {})) for t in post)
+            t.get("name") in ("read", "read_file") and _read_path(t) and
+            any(_read_path(t) == p or _read_path(t).endswith("/" + p) for p in changed or ()) for t in post)
         if not commands and any(t.get("name") == "execute" for t in post):
             checks["manager_runs_checks_after_workers"] = None
             checks["manager_inspects_changes"] = None
@@ -188,25 +309,9 @@ def grade(transcripts, case, with_skill, worker, phase=None):
                 t.get("name") == "execute" and not t.get("state", {}).get("metadata", {}).get("toolCalls")
                 for t in calls):
             checks["no_observed_status_polling"] = None
-        narration, notices = [], 0
-        final_index = next((i for i in range(len(root["messages"]) - 1, -1, -1)
-                            if root["messages"][i].get("type") == "assistant" and any(
-                                p.get("type") == "text" and p.get("text")
-                                for p in root["messages"][i].get("content", []))), None)
-        for i, message in enumerate(root["messages"]):
-            if message.get("type") != "assistant":
-                continue
-            text = "\n".join(p.get("text", "") for p in message.get("content", []) if p.get("type") == "text")
-            if i == final_index or not text:
-                continue
-            if re.search(r"\b(blocked|permission|clarif\w*|cancel\w*|plan mode|build mode)\b", text, re.I):
-                continue
-            if (worker["id"] in text and worker["variant"].lower() in text.lower()
-                    and len(text.splitlines()) == 1 and notices == 0):
-                notices += 1
-                continue
-            narration.append(text)
-        checks["no_observed_routine_narration"] = not narration
+        last_idle = max((t["info"]["time"].get("idle") for t in children
+                         if t["info"]["time"].get("idle") is not None), default=None)
+        checks["no_observed_routine_narration"] = silence(root, worker, last_idle)
         if case == "parallel":
             windows = [(t["info"]["time"]["created"], t["info"]["time"].get("idle")) for t in worker_calls]
             checks["parallel_overlap"] = any(a < d and c < b for i, (a, b) in enumerate(windows)
@@ -217,15 +322,15 @@ def grade(transcripts, case, with_skill, worker, phase=None):
             checks["no_worker_choice_in_plan"] = (phase or {}).get("no_worker_choice_in_plan")
             checks["native_mode_transition"] = any(m.get("type") == "agent-switched" and
                                                       m.get("agent") == "build" for m in root["messages"])
-            windows = sorted((t["info"]["time"]["created"], t["info"]["time"].get("idle")) for t in worker_calls)
+            windows = sorted(((t["info"]["time"].get("created"), t["info"]["time"].get("idle")) for t in worker_calls),
+                             key=lambda w: (w[0] is None, w[0] or 0))
             checks["dependent_workers_sequenced"] = len(windows) >= 2 and all(
                 b is not None and b <= c for (_, b), (c, _) in zip(windows, windows[1:]))
             if len(windows) >= 2 and windows[0][1] is not None:
                 start, end = windows[0][1], windows[1][0]
                 shell = lambda t: t.get("name", "").lower() in ("shell", "bash", "powershell")
                 tests_between, tests_unknown, tests_late = completed_between(calls, start, end, lambda t: shell(t) and
-                    re.match(r"\s*(?:python|python3)(?:\.exe)?\s+.*-m\s+unittest\b",
-                             t.get("state", {}).get("input", {}).get("command", "")))
+                    is_check_command(t.get("state", {}).get("input", {}).get("command", "")))
                 latest_between = {}
                 for tool in sorted(tests_between, key=lambda t: t.get("time", {}).get("completed", float("-inf"))):
                     latest_between[tool["state"]["input"]["command"]] = tool

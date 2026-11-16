@@ -8,7 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from evals.codex_run import Codex, export, resolve, run_case
-from evals.codex_review import grade, usage, usage_by_role
+from evals.codex_review import _unittest_invocation, grade, usage, usage_by_role
+from evals.evidence import inspects_diff
 from evals.run import Blocked
 
 
@@ -94,6 +95,8 @@ class CodexTests(unittest.TestCase):
         alone = usage_by_role([event("root", 3)], [{"thread": {"id": "root"}}], "root")
         self.assertEqual(alone["children"]["sessions"], 0)
         self.assertEqual(alone["children"]["input"], 0)
+        self.assertIsNone(alone["children"]["cost_usd"])
+        self.assertEqual(alone["helpers"]["sessions"], 0)
 
     def test_chained_status_and_diff_counts_as_inspection(self):
         records, meta = orchestration_records()
@@ -213,15 +216,104 @@ class CodexTests(unittest.TestCase):
             item["aggregatedOutput"] = unittest_output()
         self.assertFalse(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
 
-    def test_powershell_check_chain_counts_only_final_unittest_output(self):
+    def test_powershell_check_chain_no_longer_counts_but_single_wrapped_check_does(self):
+        records, meta = orchestration_records()
+        prefix = '"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe" -Command '
+        chain = prefix + "'git diff; git status --short; python -B -m unittest discover -s tests -v'"
+        self.assertFalse(_unittest_invocation(chain))
+        self.assertTrue(inspects_diff(chain))
+        single = prefix + "'python -B -m unittest discover -s tests -q'"
+        self.assertTrue(_unittest_invocation(single))
+        events = parallel_events(left_code=0)
+        for index in (5, 6):
+            events[index]["message"]["params"]["item"]["command"] = chain
+        self.assertFalse(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
+        for index in (5, 6):
+            events[index]["message"]["params"]["item"]["command"] = single
+        self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
+
+    def test_posix_shell_wrappers_are_unwrapped(self):
+        for command in ["bash -lc 'python -m unittest -q'", "/bin/bash -lc 'python3 -B -m unittest discover -s tests'",
+                        'zsh -c "python -m unittest"', "/usr/bin/sh -c 'python -m unittest'"]:
+            self.assertTrue(_unittest_invocation(command), command)
+        for command in ["bash -lc 'python -m unittest | tail -3'", "bash -lc 'git diff; python -m unittest'",
+                        "bash -lc 'python -m unittest' > log", "bash -lc 'echo python -m unittest'"]:
+            self.assertFalse(_unittest_invocation(command), command)
         records, meta = orchestration_records()
         events = parallel_events(left_code=0)
-        command = ('"C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe" -Command '
-                   "'git diff; git status --short; python -B -m unittest discover -s tests -v'")
-        events[5]["message"]["params"]["item"]["command"] = command
-        events[5]["message"]["params"]["item"]["aggregatedOutput"] = (
-            "diff --git a/left.py b/left.py\n" + unittest_output(4))
-        self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_runs_successful_checks"])
+        events[7]["message"]["params"]["item"]["command"] = "/bin/bash -lc 'git --no-pager diff'"
+        self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_inspects_changes"])
+        events[7]["message"]["params"]["item"]["command"] = "/bin/bash -lc 'git diff --stat'"
+        self.assertFalse(grade(events, records, meta, "parallel")["checks"]["manager_inspects_changes"])
+
+    def test_silence_passes_with_notice_tool_only_items_and_final(self):
+        records, meta = orchestration_records()
+        self.assertTrue(grade(parallel_events(left_code=0), records, meta, "parallel")["checks"]["no_observed_routine_narration"])
+
+    def test_notice_needs_whole_word_single_line_and_mid_turn_keywords_are_narration(self):
+        records, meta = orchestration_records()
+        for text in ("Using workers maximally", "Using worker\nmax effort"):
+            events = parallel_events(left_code=0)
+            events[0]["message"]["params"]["item"]["text"] = text
+            self.assertFalse(grade(events, records, meta, "parallel")["checks"]["no_observed_routine_narration"], text)
+        events = parallel_events(left_code=0)
+        events.insert(6, item_event(5.5, {"type": "agentMessage", "text": "Auditing now (no permission issues)."}))
+        self.assertFalse(grade(events, records, meta, "parallel")["checks"]["no_observed_routine_narration"])
+
+    def test_final_must_follow_last_tool_and_worker_completion(self):
+        records, meta = orchestration_records()
+        events = parallel_events(left_code=0)
+        final = events.pop(8)
+        events.insert(4, final)
+        self.assertFalse(grade(events, records, meta, "parallel")["checks"]["no_observed_routine_narration"])
+        events = parallel_events(left_code=0)
+        del events[8]
+        self.assertFalse(grade(events, records, meta, "parallel")["checks"]["no_observed_routine_narration"])
+
+    def test_turn_end_text_awaiting_user_is_exempt(self):
+        records, meta = orchestration_records(("plan", "default"))
+        events = parallel_events(left_code=0)
+        plan_turn = [item_event(-2, {"type": "agentMessage", "text": "Plan:\n1. left\n2. right"}),
+                     {"direction": "received", "message": {"method": "turn/completed",
+                      "params": {"threadId": "root", "turn": {"id": "plan", "status": "completed"}}}}]
+        self.assertTrue(grade(plan_turn + events, records, meta, "parallel")["checks"]["no_observed_routine_narration"])
+
+    def test_helper_threads_are_ignored_for_worker_settings_and_split_in_usage(self):
+        records, meta = orchestration_records()
+        records.append({"thread": {"id": "scout", "agentRole": "explorer"}, "turn_contexts": [{"payload": meta["manager"]}]})
+        events = parallel_events(left_code=0)
+        events.insert(1, item_event(0.5, {"type": "subAgentActivity", "kind": "started", "agentThreadId": "scout"}))
+        events.insert(2, item_event(0.6, {"type": "subAgentActivity", "kind": "completed", "agentThreadId": "scout"}))
+        checks = grade(events, records, meta, "parallel")["checks"]
+        self.assertTrue(checks["exact_worker_settings"])
+        self.assertTrue(checks["two_workers"])
+        def usage_event(thread, tokens):
+            return {"direction": "received", "message": {"method": "thread/tokenUsage/updated", "params": {
+                "threadId": thread, "tokenUsage": {"total": {"inputTokens": tokens}}}}}
+        spawn = item_event(0, {"type": "collabAgentToolCall", "tool": "spawn_agent",
+                               "arguments": '{"agent_type": "explorer"}', "receiverThreadIds": ["probe"]})
+        plain = [{"thread": {"id": t}, "turn_contexts": []} for t in ("root", "left", "probe")]
+        split = usage_by_role([spawn, usage_event("root", 1), usage_event("left", 2), usage_event("probe", 4)], plain, "root")
+        self.assertEqual((split["workers"]["input"], split["helpers"]["input"], split["children"]["input"]), (2, 4, 6))
+        self.assertIsNone(split["children"]["cost_usd"])
+
+    def test_retry_spawn_still_counts_two_pieces_and_dependent_acceptance(self):
+        records, meta = orchestration_records(("plan", "default"))
+        records.append({"thread": {"id": "left2"}, "turn_contexts": [{"payload": meta["worker"]}]})
+        events = [item_event(0, {"type": "agentMessage", "text": "Using worker max"}),
+                  item_event(1, {"type": "subAgentActivity", "kind": "started", "agentThreadId": "left"}),
+                  item_event(2, {"type": "subAgentActivity", "kind": "completed", "agentThreadId": "left"}),
+                  item_event(2.2, audit_item("python -m unittest tests.test_left", 1, "FAILED (failures=1)\n")),
+                  item_event(2.5, {"type": "subAgentActivity", "kind": "started", "agentThreadId": "left2"}),
+                  item_event(2.7, {"type": "subAgentActivity", "kind": "completed", "agentThreadId": "left2"}),
+                  item_event(2.8, audit_item("python -m unittest tests.test_left", 0, unittest_output())),
+                  item_event(2.9, audit_item("git diff", 0, "diff --git a/left.py b/left.py")),
+                  item_event(3, {"type": "subAgentActivity", "kind": "started", "agentThreadId": "right"}),
+                  item_event(4, {"type": "subAgentActivity", "kind": "completed", "agentThreadId": "right"})]
+        checks = grade(events, records, meta, "plan-handoff")["checks"]
+        self.assertTrue(checks["two_workers"])
+        self.assertTrue(checks["dependent_workers_sequenced"])
+        self.assertTrue(checks["dependent_manager_acceptance_between_workers"])
 
     def test_dependent_codex_requires_diff_and_passing_check_before_next_dispatch(self):
         records, meta = orchestration_records(("plan", "default"))

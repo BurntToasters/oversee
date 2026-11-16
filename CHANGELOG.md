@@ -43,6 +43,7 @@ Since skills CLI 1.8.0, Codex, Cursor, OpenCode, Copilot, and Cline are installe
 - Host references: auto-approval warnings for headless `claude -p` and `codex exec` workers; the OpenCode headless `run` form, Kiro V3 spawn-list limits, and Cline `--timeout`, which the per-host split had dropped.
 - `AGENTS.md`: host tables and sources moved to `docs/hosts.md` (not installed), cutting the file from 30.8 KB to about 22 KB; decisions are listed in order.
 - Eval recorders write `usage_by_role` (manager, children, manager turns) beside the unchanged `usage`, so manager cost can be compared before and after. Chained inspection commands such as `git status --short && git diff` now count as reading the diff; a `git diff` inside a quoted string does not.
+- Eval graders match the 1.2.0 rules: piped, redirected, or chained checks no longer pass; POSIX shell wrappers are unwrapped for Codex; diff inspection ignores summary flags and accepts git global options; reads count only on changed paths; silence exempts the text ending each user turn (such as a plan shown for approval) instead of keywords, and fails a run with no final report; `usage_by_role` adds `workers` and `helpers`; Codex retries and helper threads no longer fail worker checks; the OpenCode recorder waits until the child set is stable and records the root id. Pilot prompts use quiet checks (`-q`). Regraded Codex Windows evidence may score its check differently.
 
 ### Added
 
