@@ -29,13 +29,14 @@ FORBIDDEN_FLAGS = ("--dangerously-skip-permissions", "bypassPermissions", "--all
 SCOPE = "\nWork only in this fixture. Do not commit, push, install dependencies, change global settings, or access other projects."
 
 
-def stage(output, case, dirty=True):
-    """Committed fixture with the skill in `.claude/skills` (ignored), plus a user edit and an untracked file."""
+def stage(output, case, dirty=True, skill_dir=".claude/skills/oversee"):
+    """Committed fixture with the skill in the host's project folder (ignored), plus a user edit and an untracked file."""
     project = output / "project"
     shutil.copytree(ROOT / "evals/fixtures" / case["fixture"], project)
-    (project / ".gitignore").write_text("__pycache__/\n*.pyc\n.notes.json\n.claude/\n", encoding="utf-8")
+    host_dir = Path(skill_dir).parts[0]
+    (project / ".gitignore").write_text(f"__pycache__/\n*.pyc\n.notes.json\n{host_dir}/\n", encoding="utf-8")
     init_repo(project)
-    shutil.copytree(ROOT / "skills/oversee", project / ".claude/skills/oversee")
+    shutil.copytree(ROOT / "skills/oversee", project / skill_dir)
     if dirty:
         with (project / "README.md").open("a", encoding="utf-8") as readme:
             readme.write("\n" + USER_NOTE + "\n")

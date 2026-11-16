@@ -183,6 +183,26 @@ Results on 2026-11-16 (Claude Code 2.1.325, Opus 5.5 medium managing Haiku; one 
 
 After the first five, `SKILL.md` names `git hash-object` for untracked files and `claude-code.md` says to write nothing but the waiting line before the report; both reruns had no denials and no extra text. All seven kept the user's edit and untracked file, left HEAD and the stash list unchanged, and passed the fixture tests and behavior probe. Blocking parallel runs of the same case cost $0.254-0.273 over four runs; fork-mode runs ranged $0.226-0.354 over three, so a single-run difference of that size is noise.
 
+## Cursor CLI recorder
+
+```bash
+python -B -m evals.cursor_run --manager grok-4.7-xhigh --worker composer-2.5 --output ../oversee-workspace/cursor-new
+```
+
+`evals/cursor_run.py` runs the pilot prompts through `agent -p --output-format stream-json --trust` in the same committed fixture, with the skill in an ignored `.cursor/skills/oversee` and a project `.cursor/cli.json` that allows only test-runner commands and read-only git and denies commits, resets, and checkouts. It never passes `--force` or `--yolo`. Coding prompts add consent to create a worker profile if the Task tool cannot name the model. Grading follows the Claude Code recorder (stream-json `assistant` text and `taskToolCall`/`shellToolCall` events; rejected commands and missing interpreters are not check results) and adds two checks: every skill file read comes from the fixture, and no worker transcript is read. Cursor reports tokens, not cost.
+
+Cursor loads `~/.agents/skills` and `~/.claude/skills` as well as the project. A first probe (`cursor-probe`) read the global 1.1.1 copy's `references/harnesses.md` next to the fixture's 1.2.0 `cursor.md`, so the global copy was moved aside for the graded runs and restored afterward.
+
+Results on 2026-11-16 (`cursor-1.2.0`; CLI 2026.11.13; Grok 4.7 xhigh managing Composer 2.5, because the Anthropic and OpenAI models were over the account's usage limit; one run each):
+
+| Case | Time | Verified | Notes |
+|---|---|---|---|
+| explain | 20 s | yes | no workers |
+| parallel | 213 s | no | per-call `model: composer-2.5` on both workers, overlapping; a preamble and a progress sentence; chained baseline commands and a `python3 -c` probe were rejected by the allowlist; no `-uall` or `git stash create` baseline |
+| dependent | 217 s | no | read `SKILL.md`, followed the baseline exactly (`-uall`, `git stash create`, `git diff <id>`), checked between workers; three progress sentences |
+
+Both coding cases passed the fixture tests and behavior probe and kept the user's edit, untracked file, HEAD, and stash list. The parallel manager's reasoning says the skill was "already inlined in the manually attached skills", so the misses are the manager model's rule-following, not skill loading. The Task tool takes a per-call `model`, which the Cursor docs mention but do not specify; `cursor.md` now says so.
+
 ## Install smoke tests
 
 skills CLI 1.7.6 (local-path source) and 1.9.0 ran on macOS against a throwaway `HOME` with telemetry off. On 2026-11-16 with 1.9.0, a local-path install for all eight hosts wrote one canonical copy to `~/.agents/skills/oversee`, identical to `skills/oversee/` including `agents/openai.yaml`, used it directly for Codex, Cursor, OpenCode, Copilot, and Cline, and symlinked it into `~/.claude/skills`, `~/.gemini/config/skills`, and `~/.kiro/skills`. A GitHub-source install (`main`) recorded the source commit in the lock file; `update` reported it current and `remove` deleted the copy and every link. `update` across the 1.7-to-1.8 layout move and Windows links are untested.

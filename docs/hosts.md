@@ -31,7 +31,7 @@ Checked 2026-10-15; Kiro CLI and additional hosts 2026-11-03; Claude Code, Codex
 | OpenCode v1 | Task delegation; General, Explore, Scout | Inspect active schema/version | Profiles or singular `agent` config | Native selection/profile capabilities differ from v2 |
 | Codex | Ask in plain language. Built in: `default`, `worker`, `explorer` | Waits for all results, then consolidates | `~/.codex/agents/*.toml` or `.codex/agents/*.toml`; `name`, `description`, `developer_instructions` required | `model` and `model_reasoning_effort` in the file, or per spawn. Headless `codex exec` is read-only unless `--sandbox workspace-write`. `workspace-write` keeps `.git`, `.agents`, `.codex` read-only (recursive), so `git stash create` and commits fail |
 | Copilot | Built-in (`explore`, `task`, `general-purpose`, `code-review`, `research`, `rubber-duck`, `security-review`) or custom agents; inspect actual schema | Version-specific; not live-tested | `.github/agents/NAME.md` | Profile `model` is documented; per-call effort/override needs local verification |
-| Cursor | Task tool. Built in: explore, browser | Several calls in one message run in parallel. `is_background` flag. Two nesting levels: the main agent's direct subagents can launch subagents; theirs cannot (Cursor 2.5+) | `.cursor/agents/*.md`. Also reads `.claude/agents` and `.codex/agents` | Frontmatter `model`: `inherit` or a model ID. Effort in brackets, such as `[effort=high]` |
+| Cursor | Task tool. Built in: explore, browser | Several calls in one message run in parallel. `is_background` flag. Two nesting levels: the main agent's direct subagents can launch subagents; theirs cannot (Cursor 2.5+) | `.cursor/agents/*.md`. Also reads `.claude/agents` and `.codex/agents` | Per-call Task `model` (CLI 2026.11.13 schema, observed live); profile frontmatter `model`: `inherit` or a model ID. Effort is part of the ID or in brackets, such as `[effort=high]` |
 | Antigravity | `invoke_subagent` and `define_subagent`; built in: research, browser, self | Asynchronous background subagents, parallel execution, nesting limit 10 | `.agents/agents/NAME.md` or `~/.gemini/config/agents/NAME.md` | Native subagents: tiers `inherit`, `flash`, `pro`; headless `agy -p --model --effort` for exact settings |
 | Cline | Agent teams with coordinator/teammate tools; headless CLI | Multi-agent teams; headless runs with `--json`. A prompt run auto-approves all tools by default (yolo); `--auto-approve false` keeps approvals | Inspect current Cline agent config; not verified here | `-m/--model`, `-P/--provider`, `--thinking` `none`/`low`/`medium`/`high`/`xhigh` |
 | Kiro CLI | Native subagent delegation; any custom agent file can run as a sub-agent; no ad-hoc definition in 2.x or V3 | Parallel, DAG dependencies, review loops; main agent waits and aggregates | `.kiro/agents/NAME.json|.md` or `~/.kiro/agents/` | Custom-agent `model`; effort only per session (`--effort`, `/effort`) or per model via `chat.modelDefaults`; no per-subagent effort |
@@ -46,7 +46,7 @@ Model IDs and variants are location/version-specific. Discover them at run time;
 | OpenCode v1 | User Plan/Build control; programmatic handoff unverified |
 | Claude Code | Native plan approval/exit; user permission-mode control if tool absent |
 | Codex | Native app-server Plan-to-Default transition smoke-tested; retain ready plan and worker choice until host enables execution; UI remains unverified |
-| Cursor | User clicks Build after reviewing plan |
+| Cursor | Editor: user clicks Build after reviewing plan. CLI: Shift+Tab, `/plan`, or `--plan` |
 | Antigravity | `/plan` creates an Implementation Plan artifact; **Proceed** enters execution; `Shift+Tab` cycles modes |
 | Cline | `-p`/`--plan` keeps the run read-only; enable execution before dispatch |
 | Kiro CLI | Native Plan mode (V3 `Shift+Tab`; V2 `/plan`); approval hands the plan to the Default agent |
@@ -78,6 +78,8 @@ Checked 2026-10-15 unless noted; source dates in retained evidence remain histor
 - Codex sandbox protected paths (`.git`, `.agents`, `.codex`), checked 2026-11-16: https://learn.chatgpt.com/docs/agent-approvals-security
 - Claude Code sandboxing (`.git` writability) and sub-agents (`SendMessage`, `isolation`, `name` with agent teams), checked 2026-11-16: https://code.claude.com/docs/en/sandboxing and https://code.claude.com/docs/en/sub-agents
 - Cursor subagent nesting (two levels since 2.5), checked 2026-11-16: https://cursor.com/docs/subagents
+- Cursor skills (one-message attachment, Custom Mode, `~/.agents/skills` and `~/.claude/skills` discovery) and CLI modes and permissions, checked 2026-11-16: https://cursor.com/docs/skills https://cursor.com/docs/cli/using https://cursor.com/docs/cli/reference/permissions
+- Cursor Task per-call `model` (live CLI 2026.11.13 stream-json `taskToolCall.args.model`), observed 2026-11-16
 - skills CLI `check` exit status (docs/commands.md, 1.8.1), checked 2026-11-16: https://github.com/vercel-labs/skills/blob/main/docs/commands.md
 - Claude Code `Agent` `run_in_background` (live `claude -p` 2.1.325 tool schema: present by default and with `CLAUDE_CODE_FORK_SUBAGENT=0`, absent with `=1`) and the no-visible-output prompt (2.1.325 binary; not in the docs), checked 2026-11-16
 - Cline CLI approval default (`cline --help` text in the docs), checked 2026-11-16: https://docs.cline.bot/cli
