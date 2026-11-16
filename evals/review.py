@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .evidence import final_text, grade, plan_phase_checks, total_usage
+from .evidence import final_text, grade, plan_phase_checks, total_usage, usage_by_role
 from .run import ROOT, correctness, provider_blocker, snapshot, write_json
 
 
@@ -39,7 +39,8 @@ def review(source, output):
                     retained["transcripts"], phase.get("unchanged"), meta["worker"], meta["manager"])["no_worker_choice_in_plan"]}
         result = {"source": str(case_dir), "case": case, "with_skill": meta["with_skill"],
                   "orchestration": grade(raw, case, meta["with_skill"], meta["worker"], phase),
-                  "usage": total_usage(raw), "provider_blocker": provider_blocker(raw)}
+                  "usage": total_usage(raw), "usage_by_role": usage_by_role(raw),
+                  "provider_blocker": provider_blocker(raw)}
         result["orchestration"]["checks"]["exact_manager_settings"] = bool([
             m for m in raw[0]["messages"] if m.get("type") == "assistant"]) and all(
             m.get("model") == meta["manager"] for m in raw[0]["messages"] if m.get("type") == "assistant")

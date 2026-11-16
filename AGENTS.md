@@ -2,37 +2,37 @@
 
 Instructions for agents working on this repo. Read this before changing anything.
 
-This file is not installed with the skill. The installed payload is `skills/oversee/` (`SKILL.md` plus `references/`), whether installed by `npx skills add` or by the bundled scripts. Anything the installed skill needs at runtime must live there.
+This file is not installed with the skill. The installed payload is `skills/oversee/` (`SKILL.md` plus `references/`), installed by `npx skills add`. Anything the installed skill needs at runtime must live there.
 
 ## What this repo is
 
-`oversee` is one agent skill. The skill folder is `skills/oversee/`; the repo root holds docs, installers, evals, and tests. Users run it with `/oversee`.
+`oversee` is one agent skill. The skill folder is `skills/oversee/`; the repo root holds docs, evals, tests, and version tooling. Users run it with `/oversee`.
 
 The README premise: a larger model oversees other subagents without micromanaging them.
 
 The intended setup is a higher-tier model as manager (for example Claude Opus 5.5 or GPT-6.1 Sol) and cheaper workers as subagents (for example Claude Haiku 5.5 or GPT-6 Luna). The manager plans and audits. The workers implement. The main goal is fewer tokens, so the manager never polls workers.
 
-Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in these. GitHub Copilot and Antigravity are best-effort: keep install paths and harness notes, but do not block releases on them (see Decision 13).
+Primary hosts: Claude Code, Codex, Cursor, and OpenCode. The skill must work in these. GitHub Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI installs the skill for them (Cline needs a link into `~/.cline/skills`, see README) and their harness notes stay, but do not block releases on them (see Decision 13).
 
 Owner: BurntToasters. License: MIT.
 
-## Status (2026-11-09)
+## Status (2026-11-16)
 
 | Item | State |
 |---|---|
 | Design | Mostly settled. See Decisions below |
-| `npx skills add BurntToasters/oversee -g` | Primary installer since 1.1.0. skills CLI 1.7.6 smoke-tested on macOS against a throwaway `HOME` with a local-path source: one canonical copy in `~/.agents/skills/oversee`, symlinks for Claude Code and Kiro. GitHub-source install not yet run |
-| `install.bat`, `install.sh`, `uninstall.bat`, `uninstall.sh`, `remote-install.ps1` | Legacy installers, kept for hosts without Node. Current regression suite covers Windows cmd/PowerShell and Git Bash, including fault injection during replacement and recovery (`tests/test_installer_rollback.py`) and the remote installer's `tar` shadowing/zip fallback. WSL was tested on the earlier revision; current macOS/WSL checks remain pending. Both installers support local and internet installs |
-| `SKILL.md` | Explicit activation, implementation-only scope, run ends at its report, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries |
-| `references/harnesses.md` | Official sources rechecked 2026-10-15; Kiro CLI, Cline, and additional host coverage checked 2026-11-03; Claude Code, Codex, OpenCode v2, Cursor, Kiro rechecked 2026-11-07. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
-| `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, and implementation-only scenarios 40-44, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools, and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
+| `npx skills add BurntToasters/oversee -g` | Only installer since 1.2.0 (primary since 1.1.0). skills CLI 1.7.6 smoke-tested on macOS against a throwaway `HOME` with a local-path source: one canonical copy in `~/.agents/skills/oversee`, symlinks for Claude Code and Kiro. GitHub-source install not yet run. CLI 1.8.0 changed the global layout (source-checked 2026-11-16; see Install layout) |
+| `SKILL.md` | Explicit activation, implementation-only scope, run ends at its report, arbitrary live model selection, ready-plan handoff, baseline audit, bounded retries; 1.2.0 manager context economy (Decision 15) within a 13.5 KB budget |
+| `references/*.md` | One file per host since 1.2.0 (`claude-code`, `codex`, `opencode`, `cursor`, `copilot`, `antigravity`, `cline`, `kiro`, `headless`); a run opens only its host's file. Claude Code and OpenCode v2 rechecked 2026-11-16 (OpenCode against the v2.3.0 docs source); Codex, Cursor, Kiro keep their 2026-11-07 check; Cline and Antigravity 2026-11-03; Copilot 2026-10-15. OpenCode v2.0.29 service-API prompt and Codex CLI 0.162.0-alpha.17.2 have Windows smoke evidence; OpenCode v1, TUI slash parsing, Kiro CLI, Cline, and other hosts are not live-tested |
+| `evals/` | Scenario catalog (including invocation-wording scenarios 19-33 and planning-scope scenarios 34-39, implementation-only scenarios 40-44, and context-economy scenarios 45-49, structure-checked by `tests/test_catalog.py`), OpenCode/Codex native evidence and review tools with `usage_by_role` (manager versus children), and offline regression checks; three Codex smoke cases added to existing Go evidence; dependent narration compliance still fails |
 | `version.txt`, `bump-ver.py` | Canonical skill version with synchronized metadata/README, validation, dry run, and replacement rollback; development-only |
-| `CHANGELOG.md` | Per-version change log; 1.1.1 in progress |
-| `README.md` | Written with install, uninstall, compatibility, and usage instructions |
+| `docs/hosts.md` | Maintainer host tables and sources, moved out of this file in 1.2.0; not installed |
+| `CHANGELOG.md` | Per-version change log; 1.2.0 in progress |
+| `README.md` | Install, migration from the removed scripts, uninstall, host notes, compatibility, usage, and "Keeping runs cheap" (no savings claim) |
 
 ## Decisions
 
-Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only with the owner.
+Items 1 to 5, 7 to 8, 13, 14, and 15 were agreed with the owner. Change them only with the owner. Decision 13 was reworded 2026-11-16 after the owner ordered the install scripts removed; Decision 12 gained the `git stash create` baseline the same day at the owner's request.
 
 1. **Invocation.** `/oversee <task>` starts a run. `/oversee` alone oversees work already in progress in the conversation. If nothing is in progress, ask what to oversee.
 2. **Scope.** Coding first. Acceptance means tests, builds, or diffs that can be checked. Non-code work is out of scope for v1.
@@ -49,9 +49,10 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 9. **Trigger.** Explicit invocation or an explicit request for this workflow only. Quoted commands, skill reviews, and ordinary coding questions must not activate execution. A run ends with its final report; later turns are ordinary requests until the user invokes again. Keep the portable behavioral guard; optional host controls are documented, not installed.
 10. **Universal core.** `SKILL.md` must not depend on one harness's tool names or model IDs. Harness details go in `references/`.
 11. **Plan mode.** A ready conversation plan counts as existing work. In Plan mode the worker choice names who implements after approval, not who plans: the manager researches and plans itself, prepares briefs, records the worker choice in the plan, and uses native approval/mode transition. Dispatch implementation only after the host enables execution; no second invocation or duplicate workers. Host planning helpers keep host defaults and never receive the worker choice. Outside Plan mode the same invocation plans and dispatches now.
+12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience. Since 2026-11-16 (owner-approved) a dirty-tree baseline may use `git stash create`, which records staged and unstaged edits as a commit id without changing the index, working tree, or stash list.
+13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: the skills CLI installs the skill for them (Cline needs a link into `~/.cline/skills`, see README) and their harness notes stay in `references/`, but their live verification is optional and does not block a release.
 14. **Implementation-only scope.** Agreed with the owner 2026-10-16; tightened 2026-11-09. Workers only implement. Planning, research, repo mapping, review, and audit are manager work in every mode, even when the user asks for workers to do them. A read-only invocation dispatches nothing. After a run, later requests never go to the earlier workers; only a later oversee run that names no worker may reuse the choice.
-12. **Workspace preservation.** Snapshot staged, unstaged, and untracked state; compare actual changes against that baseline. Never reset, stash, stage, or discard user edits for convenience.
-13. **Host priority.** Agreed with the owner 2026-10-15. Primary: Claude Code, Codex, Cursor, OpenCode. Stable-release host gates apply to these only. Copilot, Cline, Antigravity, and Kiro CLI are best-effort: keep installing to their paths and keep their harness notes, but their live verification is optional and does not block a release.
+15. **Manager context economy.** Agreed with the owner 2026-11-16 for 1.2.0. The manager's context is re-read every turn, so it opens only its host's reference, does not re-explore a ready plan, and keeps a compact baseline (commit id and short status; on a dirty tree a `git stash create` id plus untracked-file hashes; no full diffs; no snapshot files), reopens its rules if compaction drops them. Briefs carry start pointers and piece-scoped checks; workers return `Changed`/`Checks`/`Unfinished`/`Uncertain`. The manager waits for the whole current batch with no text, audits from a whole-workspace path list and real diffs, and runs quiet checks one per command with no pipes. Between the worker-choice line and the report, manager turns are tool calls only, except required handoff, clarification, blocker, and cancellation messages and announcing an authorized worker change. Decisions 4, 5, 8, and 14 are unchanged; Decision 12 gained the `git stash create` baseline.
 
 ## Invocation wording
 
@@ -64,15 +65,15 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 
 ## SKILL.md outline
 
-0. When the skill applies: invocation only, implementation only, one run then done.
-1. Reading the invocation and reuse of ready plans.
+0. When the skill applies: invocation only, implementation only, one run then done. Before it: the context cost model and structural silence.
+1. Reading the invocation and reuse of ready plans without re-exploring them.
 2. Plan-mode handoff before implementing dispatch; worker choice reserved for implementation, manager-only planning.
-3. Choose workers: named, asked, or chosen by difficulty.
-4. Plan, ownership, dependencies, and starting workspace snapshot.
-5. Complete worker briefs with scope, constraints, checks, and short reports.
-6. Batch dispatch within concurrency limits, then blocking waits/completion events.
-7. Audit, integration checks, complete retries, and stopping conditions.
-8. Result-only report, which ends the run; link the installed harness reference where needed.
+3. Open only the host's reference file; choose workers: named, asked, or chosen by difficulty.
+4. Plan, ownership, dependencies, and a compact starting baseline (`git stash create` on a dirty tree).
+5. Self-contained worker briefs: scope, start pointers, constraints, piece-scoped checks, fixed report fields.
+6. Batch dispatch within concurrency limits, then one wait for the current batch; no text on staggered notices; headless fallback reference.
+7. Audit from a whole-workspace path list and real diffs, quiet unpiped checks, integration checks, retries with failing lines, stopping conditions.
+8. Result-only report, which ends the run.
 
 ## Skill file rules
 
@@ -81,128 +82,49 @@ Items 1 to 5, 7 to 8, 13, and 14 were agreed with the owner. Change them only wi
 - OpenCode-specific switches go under `metadata` as quoted strings. The legacy v1 docs describe `opencode/slash: "true"` for TUI slash commands; current v2 docs describe `@skill-id` and native skill loading, and do not document that switch. `opencode/autoinvoke: "false"` keeps the skill out of the model's automatic picks. Other tools ignore these keys.
 - `name` is `oversee`, matching the folder name. Use lowercase letters, digits, and single hyphens only.
 - `description` is 1 to 1024 characters. Lead with the `/oversee` trigger and the coding-only scope.
-- `SKILL.md` stays under 500 lines. Put detail in `references/`, one level deep.
-- The installed payload is `skills/oversee/` only, holding `SKILL.md` and `references/`. Put nothing else in that folder: the skills CLI copies the whole folder, and `tests/test_installers.py` checks the layout.
+- `SKILL.md` stays under 500 lines and 13,500 bytes. Put detail in `references/`, one level deep: each file at most 3,500 bytes, all together at most 16,000.
+- The installed payload is `skills/oversee/` only, holding `SKILL.md` and `references/`. Put nothing else in that folder: the skills CLI copies the whole folder, and `tests/test_payload.py` checks the layout, frontmatter, byte budgets, and links.
 
 ## Install layout
 
-Primary: `npx skills add BurntToasters/oversee -g` (skills CLI by Vercel Labs, Node 22.20+). It discovers `skills/oversee/SKILL.md`, writes one canonical copy to `~/.agents/skills/oversee`, and symlinks or copies into the folders of detected agents (`-a <agent>` selects, `--copy` avoids symlinks, `-y` skips prompts). `npx skills update`, `check`, and `remove` manage it; `DISABLE_TELEMETRY=1` opts out of its telemetry. The CLI's global paths differ from ours for some hosts (OpenCode `~/.config/opencode/skills`, Cursor `~/.cursor/skills`, Copilot `~/.copilot/skills`); those hosts also read `~/.agents/skills`.
+Primary: `npx skills add BurntToasters/oversee -g` (skills CLI by Vercel Labs, Node 22.20+). It discovers `skills/oversee/SKILL.md`, writes one canonical copy to `~/.agents/skills/oversee`, and symlinks or copies into the folders of detected agents (`-a <agent>` selects, `--copy` avoids symlinks, `-y` skips prompts). `npx skills update`, `check`, and `remove` manage it; `DISABLE_TELEMETRY=1` opts out of its telemetry. Since CLI 1.8.0 (`readsCanonicalGlobally` in `src/agents.ts`), global installs for Codex, Cursor, OpenCode, Copilot, and Cline go only to `~/.agents/skills`; Claude Code gets `~/.claude/skills` (honoring `CLAUDE_CONFIG_DIR`), Antigravity `~/.gemini/config/skills`, Kiro CLI `~/.kiro/skills` (ignoring `KIRO_HOME`). 1.7.x also wrote `~/.cursor/skills`, `~/.config/opencode/skills`, and `~/.copilot/skills`; the README migration removes those. The CLI's `docs/agents.md` still lists the 1.7.x paths; its code wins. Cline conflict: Cline's docs list only `~/.cline/skills`, so the README tells Cline users to link it only if `/oversee` is missing (checked 2026-11-16 against CLI 1.8.1 source and Cline `docs/customization/skills.mdx`).
 
-Legacy scripts write the payload to six folders:
+Many other hosts read `~/.agents/skills/oversee` and need no separate target; the list, the per-host folder table, and the migration note for people who used the removed scripts or CLI 1.7.x are in the README.
 
-| Folder | Read by | Source |
-|---|---|---|
-| `~/.agents/skills/oversee` | OpenCode, Codex, Copilot, Cursor, and other cross-agent hosts | Tool docs |
-| `~/.claude/skills/oversee` | Claude Code. OpenCode and Cursor also read it, so they may see two copies | Tool docs |
-| `~/.cline/skills/oversee` | Cline | Official Cline skills docs |
-| `~/.gemini/config/skills/oversee` | Antigravity app, IDE, and CLI | Antigravity docs. The codelab names a different path |
-| `~/.gemini/antigravity-cli/skills/oversee` | Antigravity CLI additional path | Official skills and customization-discovery docs |
-| `~/.kiro/skills/oversee` | Kiro CLI 2.x and V3 | Official skills and configuration-scope docs |
+## Host facts
 
-Windows uses `%USERPROFILE%` with backslashes. Uninstall removes the `oversee` folder (or symlink) from these six locations and nothing else. `install.sh` skips a destination that is a symlink, so it coexists with an `npx skills` install; `install.bat` writes through junctions, which also lands in the canonical copy.
-
-Many other hosts read `~/.agents/skills/oversee` and need no separate target; the list is in `references/harnesses.md`.
-
-Internet install, added 2026-10-14:
-
-- `install.sh` detects how it was started. From a clone it installs from its own folder. Piped to bash, or run from a file with no `SKILL.md` next to it, it downloads the repo tarball (`OVERSEE_REPO` and `OVERSEE_BRANCH` override the defaults) and installs from that.
-- `remote-install.ps1` is the Windows equivalent for `irm ... | iex`. It downloads the tarball, extracts with `tar` (zip fallback), then runs the bundled `install.bat`.
-- Allocate Bash download state in the parent shell and install cleanup traps there. Assignments inside command substitutions do not propagate to parent cleanup. Propagate curl and tar failures.
-- Installers stage and validate both managed items, replace the entire references subtree, and restore previous managed payload on replacement failure. Updates preserve unrelated files at the destination root and neighboring skills. Each target is a separate transaction; recovery failures must retain and report backup paths.
-- README documents that download-and-execute one-liners run remote code; avoid unsupported blanket claims about Windows signing policy.
-
-## Harness reference (checked 2026-10-15; Kiro CLI, Cline, and additional hosts checked 2026-11-03)
-
-Doc links are under Sources at the end.
-
-### Invoking the skill
-
-| Harness | How the user runs it |
-|---|---|
-| Claude Code | `/oversee` |
-| Cline | `/oversee` in the CLI or IDE skill slash commands |
-| OpenCode v2 | Mention `@oversee` or use the native skill tool; TUI slash commands are configured separately |
-| OpenCode v1 | `/oversee` when the host honors `opencode/slash: "true"` |
-| Codex | `$oversee`, or pick it from `/skills`. Also matched by description |
-| Copilot CLI | `/oversee` in the prompt |
-| Cursor | `/oversee` in Agent chat |
-| Antigravity app | `/oversee` in the prompt panel |
-| Antigravity CLI | Official docs confirm skills become slash commands such as `/oversee`; not live-tested here |
-| Kiro CLI 2.x | `/oversee` as a skill slash command from 2.1; earlier 2.x auto-loads skills by description |
-| Kiro CLI V3 | `/oversee` as a skill slash command, or automatic description match |
-
-### Subagents
-
-| Harness | Spawn workers with | Parallel and wait | Custom worker file | Model and effort |
-|---|---|---|---|---|
-| Claude Code | `Agent` tool with `subagent_type` | Several calls in one message run in parallel. Background by default; 20 concurrent, 3 nesting layers | `.claude/agents/*.md` or `~/.claude/agents/` | Per call: `model` alias only and `effort` (v2.1.292+). Full model ID only in profile frontmatter; env overrides can win |
-| OpenCode v2 | Native `subagent`; General and Explore; no Scout | Foreground blocks; background completion notice | `.opencode/agents/*.md`; config uses `agents`, `system`, `permissions` | Per-call model when exposed; `provider/model#variant` from live catalog |
-| OpenCode v1 | Task delegation; General, Explore, Scout | Inspect active schema/version | Profiles or singular `agent` config | Native selection/profile capabilities differ from v2 |
-| Codex | Ask in plain language. Built in: `default`, `worker`, `explorer` | Waits for all results, then consolidates | `~/.codex/agents/*.toml` or `.codex/agents/*.toml` | `model` and `model_reasoning_effort` in the file, or per spawn |
-| Copilot | Built-in or custom agents; inspect actual schema | Version-specific; not live-tested | `.github/agents/NAME.md` | Profile `model` is documented; per-call effort/override needs local verification |
-| Cursor | Task tool. Built in: explore, browser | Several calls in one message run in parallel. `is_background` flag | `.cursor/agents/*.md`. Also reads `.claude/agents` and `.codex/agents` | Frontmatter `model`: `inherit` or a model ID. Effort in brackets, such as `[effort=high]` |
-| Antigravity | `invoke_subagent` and `define_subagent`; built in: research, browser, self | Asynchronous background subagents, parallel execution, nesting limit 10 | `.agents/agents/NAME.md` or `~/.gemini/config/agents/NAME.md` | Native subagents: tiers `inherit`, `flash`, `pro`; headless `agy -p --model --effort` for exact settings |
-| Cline | Agent teams with coordinator/teammate tools; headless CLI | Multi-agent teams; headless runs with `--json`/`--auto-approve` | Inspect current Cline agent config; not verified here | `-m/--model`, `-P/--provider`, `--thinking` levels |
-| Kiro CLI | Native subagent delegation; any custom agent file can run as a sub-agent; no ad-hoc definition in 2.x or V3 | Parallel, DAG dependencies, review loops; main agent waits and aggregates | `.kiro/agents/NAME.json|.md` or `~/.kiro/agents/` | Custom-agent `model`; effort only per session (`--effort`, `/effort`) or per model via `chat.modelDefaults`; no per-subagent effort |
-
-### Model selection and Plan-mode transitions
-
-Model IDs and variants are location/version-specific. Discover them at run time; do not maintain a model snapshot as an availability guarantee. The installed reference records syntax, sources, override precedence, and permission limits for each harness.
-
-| Harness | Plan-to-execution handoff |
-|---|---|
-| OpenCode v2 | Native transition if exposed, otherwise user switches Plan to Build; controlled eval uses native session agent switch |
-| OpenCode v1 | User Plan/Build control; programmatic handoff unverified |
-| Claude Code | Native plan approval/exit; user permission-mode control if tool absent |
-| Codex | Native app-server Plan-to-Default transition smoke-tested; retain ready plan and worker choice until host enables execution; UI remains unverified |
-| Cursor | User clicks Build after reviewing plan |
-| Antigravity | `/plan` creates an Implementation Plan artifact; **Proceed** enters execution; `Shift+Tab` cycles modes |
-| Cline | `-p`/`--plan` keeps the run read-only; enable execution before dispatch |
-| Kiro CLI | Native Plan mode (V3 `Shift+Tab`; V2 `/plan`); approval hands the plan to the Default agent |
-| Copilot | Specific programmatic transitions unverified; request host implementation mode |
-
-### Reading AGENTS.md
-
-| Harness | Reads AGENTS.md | Notes |
-|---|---|---|
-| Claude Code | Yes, from v2.1.277 | Only when no CLAUDE.md or CLAUDE.local.md exists in the working directory or above. Older versions need `@AGENTS.md` inside a CLAUDE.md |
-| OpenCode | Yes | Used before CLAUDE.md. First match wins |
-| Codex | Yes | Combined instructions capped at 32 KiB by default (`project_doc_max_bytes`) |
-| Cursor | Yes | Root and subdirectories |
-| Copilot | Yes | Nearest file wins. Also reads a root CLAUDE.md or GEMINI.md |
-| Antigravity | Yes | Any subdirectory (docs search snippet, not fetched) |
-| Kiro CLI | Yes | Root, subdirectories, and global steering; all AGENTS.md files are always included |
+Per-host invocation, subagent, model, Plan-mode, and AGENTS.md tables, with their sources and check dates, are in [`docs/hosts.md`](docs/hosts.md) (not installed). The installed per-host references must stay consistent with it.
 
 Consequence for this repo: a CLAUDE.md added at the root would make Claude Code skip this file, unless the CLAUDE.md starts with `@AGENTS.md`. Keep this file well under 32 KiB.
 
 ## Working on this repo
 
 - `SKILL.md` is the behavior source of truth. Keep it lean. Move detail into `references/`.
-- Harness-specific syntax and model IDs go only in `references/harnesses.md`. Keep it matched to the tables above.
+- Harness-specific syntax and model IDs go only in `references/`: one file per host under `references/`; a run opens only its host's file. Keep them matched to `docs/hosts.md` and within the byte budgets.
 - Don't state harness behavior from memory. Check the official docs, and record the source and date.
-- If an install path changes, update all four install and uninstall scripts, the install table here, and the README. The skills CLI picks its own paths; do not mirror them in the scripts.
-- Line endings: `.bat` files must use CRLF, because cmd can fail on LF-only files, especially with GOTO and labels. `.sh` files must use LF, because bash fails on CR. Check line endings after every edit.
-- Test the install scripts against a throwaway folder. Point `USERPROFILE` (cmd) or `HOME` (bash) at a fixture folder first. Don't run the scripts against the real profile unless the owner asks.
+- If a host's skill folder changes, update the README folder table and migration note.
+- Use LF line endings.
 - Keep this file under 32 KiB so Codex reads all of it.
 - Evals: test prompts go in `evals/evals.json`. That folder is not installed. Run outputs go in a sibling `oversee-workspace` folder, outside this repo.
 - Don't commit or push unless the owner asks.
 - `version.txt` is the canonical skill version. Use `python bump-ver.py patch|minor|major` or an exact semantic version to sync every current declaration; register new declarations in the script's `TARGETS`. Run `python bump-ver.py --check` before release. Do not change model/harness versions or historical eval evidence when bumping the skill. Version tooling is not installed.
 - Record every user-visible change under the current version in `CHANGELOG.md` (development-only, not installed). Mark the version unreleased until it ships.
-- Keep comments short. The scripts have one-line header comments; keep them that way.
+- Keep comments short.
 
 ## Verification and remaining gaps
 
-- Run `python -B -m unittest discover -s tests -v` for deterministic installer/evidence checks. Tests use temporary profiles and mock downloads; no real-profile installs or live inference.
+- Run `python -B -m unittest discover -s tests -v` for deterministic payload, catalog, version, and evidence checks. CI (`.github/workflows/tests.yml`) runs them and `bump-ver.py --check` on every push and pull request. Tests use temporary folders and synthetic evidence; no installs or live inference.
 - `evals/run.py` records six paired OpenCode sessions with caller-specified manager/worker settings. Outputs belong in a new sibling workspace folder. Usage/cost must come from native records; missing measurements stay unknown.
 - `evals/codex_run.py` records unpaired Codex smoke cases with caller-specified settings and native completion events. `evals/codex_review.py` validates retained file hashes and recovers root/child turn contexts without inference. Do not apply OpenCode's transcript schema to Codex events. Current and legacy child-event shapes require coverage; thread configuration alone is not per-turn execution proof.
 - Six Go sessions then ran using Muse Spark 1.3 Contributor xhigh and DeepSeek V4.1 Flash max. Both overseen coding cases passed independent behavior checks, with exact workers, concurrency/dependencies, and Plan handoff observed. Two coding follow-ups retested final silence/scratch wording: behavior and handoff passed, but narration compliance still failed. The original verified scratch artifact was removed; external filesystem cleanliness is not proven by the follow-up reports.
 - Evidence: `../oversee-workspace/reliability-pilot-go/`; corrected derived review: `../oversee-workspace/reliability-pilot-go-reviewed/`. Small-pilot native costs were higher with oversee ($0.029469 versus $0.006872); dependent baseline was incomplete. No savings claim is justified.
 - Codex smoke evidence: `../oversee-workspace/codex-smoke-1/`; recovered/graded evidence: `../oversee-workspace/codex-smoke-1-reviewed/`. Caller chose GPT-6.1 Sol medium with GPT-6 Luna max. Ordinary-question and parallel cases passed observed orchestration checks; dependent implementation passed behavior, exact settings, and native handoff, but failed silence. Original exporter missed current child-event shapes; derived review recovers them from retained native events without more model calls. Cost is unknown.
-- `npx skills add` was run once (skills 1.7.6, macOS, local-path source, throwaway `HOME`). The GitHub-source path, `skills update` after the layout move, and Windows symlink/junction behavior are untested.
+- `npx skills add` was run once (skills 1.7.6, macOS, local-path source, throwaway `HOME`). CLI 1.8 layout (source-checked only), the GitHub-source path, `skills update` after the layout move, whether Cline reads `~/.agents/skills`, and Windows symlink/junction behavior are untested.
 - Only the three pilot scenarios are automated live cases. Retry, dirty workspace, cancellation, and other interaction scenarios require controlled/manual behavioral runs; unit tests of the recorder do not prove model compliance.
 - Wording flexibility is intended behavior, not comprehensive live coverage. Eval scenarios 19-33 specify natural `use <model>` wording, reordered model names, missing effort, command-first/command-last placement, ready plans, pasted findings, combined audit-and-fix requests, negative quoted examples, and host parser limits. They are catalog-only; none has run live. Entries 20-22 use the placeholder model name "Example Worker"; substitute a real live model before running them. Do not claim exact wording passed without retained evidence. Scenarios 34-39 specify planning scope (worker choice never used for plan research, host helpers keep defaults, fresh-context plan handoff); also catalog-only. Scenarios 40-44 specify the 1.1.1 fix (post-run requests stay ordinary; read-only invocations dispatch nothing); catalog-only, and live checks need a multi-turn session the recorders do not drive. The OpenCode recorder now fails plan phases where a subagent ran with the requested worker setting.
-- Installer fault injection covers failure while publishing `SKILL.md` or `references/` to one target and failure of the subsequent restore, for both `install.bat` and `install.sh`. These are deterministic offline tests; they found no installer defects.
-- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery, macOS, and WSL in the current revision. Copilot, Cline, Antigravity, and Kiro CLI live checks are optional (Decision 13); Kiro CLI and Cline are documentation-checked only, and Kiro per-subagent effort is not documented. On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts. Windows cmd/PowerShell and Git Bash have deterministic installer coverage.
+- Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed, but standalone agent CLIs were not found; GUI workflows remain untested. Remaining live verification, by priority: Claude Code, Cursor, OpenCode v1 and the v2 TUI slash parser; then duplicate global discovery. Copilot, Cline, Antigravity, and Kiro CLI live checks are optional (Decision 13); Kiro CLI and Cline are documentation-checked only, and Kiro per-subagent effort is not documented. On paper, Claude Code fits best (per-call `model` and `effort`); Cursor sets worker model in agent-file frontmatter, so an arbitrary worker may need a `.cursor/agents/` profile. Both Antigravity global destinations are now confirmed in official docs for their respective hosts.
+- The 1.2.0 context-economy rules (Decision 15) and scenarios 45-49 are unmeasured and catalog-only. Regrading the retained Go pilot with `evals.review` gives a pre-1.2.0 `usage_by_role.manager` baseline without inference; a new live run is needed to measure the effect. Structural silence is also unproven until rerun live.
+- Codex docs hosts were unreachable on 2026-11-16, so `codex.md` keeps its 2026-11-07 check.
 - Default effort selection remains a relative difficulty heuristic limited to each model's supported variants. No cross-model strength ranking is claimed.
 
 ## Glossary
@@ -213,68 +135,3 @@ Consequence for this repo: a CLAUDE.md added at the root would make Claude Code 
 - **Brief**: the self-contained prompt for one worker.
 - **Batch**: the workers launched together.
 - **Audit**: the manager's review of a finished batch.
-
-## Sources
-
-Checked 2026-10-15; source dates in retained evidence remain historical.
-
-- Agent Skills spec: https://agentskills.io/specification
-- skills CLI (docs/commands.md, docs/agents.md, docs/creating-skills.md): https://github.com/vercel-labs/skills
-- Claude Code skills: https://code.claude.com/docs/en/skills
-- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
-- Claude Code memory and AGENTS.md: https://code.claude.com/docs/en/memory
-- OpenCode skills: https://opencode.ai/docs/skills/
-- OpenCode agents: https://opencode.ai/docs/agents/
-- OpenCode rules: https://opencode.ai/docs/rules/
-- OpenCode v2 agents/tools/models/permissions/skills/API: https://opencode.ai/v2/docs/
-- OpenCode v2 skills and commands: https://opencode.ai/v2/docs/skills/ and https://opencode.ai/v2/docs/commands/
-- OpenCode v1 skills and commands: https://opencode.ai/docs/skills/ and https://opencode.ai/docs/commands/
-- Copilot model configuration: https://docs.github.com/en/copilot/reference/custom-agents-configuration
-- Cursor Plan mode: https://cursor.com/help/ai-features/plan-mode
-- Codex skills: https://developers.openai.com/codex/skills
-- Codex subagents: https://learn.chatgpt.com/docs/agent-configuration/subagents
-- Codex AGENTS.md: https://developers.openai.com/codex/agent-configuration/agents-md
-- Copilot skills: https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
-- Copilot CLI skills: https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-skills
-- Copilot CLI custom agents: https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-custom-agents
-- Copilot repository instructions: https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions
-- Cursor skills: https://cursor.com/docs/skills
-- Cursor subagents: https://cursor.com/docs/subagents
-- Cursor rules and AGENTS.md: https://cursor.com/docs/rules
-- Antigravity skills: https://antigravity.google/docs/skills/
-- Antigravity subagents: https://antigravity.google/docs/subagents/
-- Antigravity customization discovery: https://antigravity.google/docs/customization-discovery/
-- Antigravity plan: https://antigravity.google/docs/plan/
-- Antigravity CLI reference: https://antigravity.google/docs/cli/reference/
-- Antigravity rules (AGENTS.md in subdirectories, from a search snippet): https://antigravity.google/docs/rules/
-- Antigravity codelab: https://codelabs.developers.google.com/getting-started-with-antigravity-skills
-- Cline skills: https://docs.cline.bot/customization/skills
-- Cline CLI: https://docs.cline.bot/cli
-- Warp skills: https://docs.warp.dev/agents/capabilities/skills
-- Warp multi-agent orchestration: https://docs.warp.dev/platform/orchestration
-- Factory Droid skills: https://docs.factory.ai/harness/skills
-- Factory Droid subagents: https://docs.factory.ai/harness/subagents
-- Junie agent skills: https://junie.jetbrains.com/docs/agent-skills.html
-- Junie subagents: https://junie.jetbrains.com/docs/junie-cli-subagents.html
-- Qwen Code skills: https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/
-- Gemini CLI skills: https://geminicli.com/docs/cli/skills/
-- Amp skills: https://ampcode.com/docs/customize/skills
-- Goose skills: https://goose-docs.ai/docs/guides/context-engineering/using-skills
-- Pi skills: https://pi.dev/docs/latest/skills
-- OpenHands skills: https://docs.openhands.dev/overview/skills
-- Augment skills: https://docs.augmentcode.com/cli/skills
-- Crush skills: https://github.com/charmbracelet/crush#agent-skills
-- Devin CLI skills: https://docs.devin.ai/cli/extensibility/skills/overview
-- Zed skills: https://zed.dev/docs/ai/skills
-- Roo Code skills: https://docs.roocode.com/features/skills
-- Kilo Code skills: https://kilo.ai/docs/customize/skills
-- Windsurf skills: https://docs.windsurf.com/windsurf/cascade/skills
-- Kiro skills: https://kiro.dev/docs/skills/
-- Kiro configuration scopes: https://kiro.dev/docs/configuration/
-- Kiro sub-agents: https://kiro.dev/docs/custom-agents/subagents/
-- Kiro agent configuration: https://kiro.dev/docs/custom-agents/configuration-reference/
-- Kiro CLI V3: https://kiro.dev/docs/cli/v3/
-- Kiro CLI commands: https://kiro.dev/docs/reference/cli-commands/
-- Kiro CLI headless: https://kiro.dev/docs/cli/headless/
-- Kiro reasoning effort: https://kiro.dev/docs/models/effort/
-- Kiro steering and AGENTS.md: https://kiro.dev/docs/steering/

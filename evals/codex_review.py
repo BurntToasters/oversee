@@ -137,21 +137,38 @@ def grade(events, records, meta, case):
     return {"verified": all(v is True for v in checks.values()), "checks": checks}
 
 
-def usage(events, records):
+FIELDS = {"input": "inputTokens", "output": "outputTokens", "reasoning": "reasoningOutputTokens",
+          "cache_read": "cachedInputTokens", "cache_write": "cacheWriteInputTokens"}
+
+
+def _measured(events):
     measured = {}
     for event in events:
         message = event["message"]
         if event["direction"] == "received" and message.get("method") == "thread/tokenUsage/updated":
             params = message["params"]
             measured[params["threadId"]] = params["tokenUsage"]["total"]
-    ids = {r["thread"]["id"] for r in records}
-    fields = {"input": "inputTokens", "output": "outputTokens", "reasoning": "reasoningOutputTokens",
-              "cache_read": "cachedInputTokens", "cache_write": "cacheWriteInputTokens"}
+    return measured
+
+
+def _totals(measured, ids):
     result = {"sessions": len(ids), "cost_usd": None}
-    for label, field in fields.items():
+    for label, field in FIELDS.items():
         values = [measured.get(sid, {}).get(field) for sid in ids]
         result[label] = sum(values) if values and all(v is not None for v in values) else None
     return result
+
+
+def usage(events, records):
+    return _totals(_measured(events), {r["thread"]["id"] for r in records})
+
+
+def usage_by_role(events, records, root):
+    """Split usage into the root thread and its descendants; events hold cumulative totals, not turns."""
+    measured = _measured(events)
+    others = {r["thread"]["id"] for r in records} - {root}
+    children = _totals(measured, others) if others else {"sessions": 0, "cost_usd": 0, **dict.fromkeys(FIELDS, 0)}
+    return {"manager": _totals(measured, {root}), "children": children, "manager_turns": None}
 
 
 def main():
@@ -194,7 +211,8 @@ def main():
                     for e in events[:first_execution])
                 orchestration["verified"] = all(v is True for v in orchestration["checks"].values())
             report = {"case": folder.name, "correctness": proof, "orchestration": orchestration,
-                      "usage": usage(events, records), "elapsed_seconds": json.loads((folder / "result.json").read_text())["elapsed_seconds"]}
+                      "usage": usage(events, records),
+                      "usage_by_role": usage_by_role(events, records, meta["root"]), "elapsed_seconds": json.loads((folder / "result.json").read_text())["elapsed_seconds"]}
             destination = output / folder.name
             destination.mkdir()
             write_json(destination / "native.json", records)

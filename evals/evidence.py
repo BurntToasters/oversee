@@ -26,6 +26,28 @@ def total_usage(transcripts):
     return {"sessions": len(sessions), **totals}
 
 
+def usage_by_role(transcripts):
+    """Split total_usage by session: the root session is the manager, every other session a child."""
+    if not transcripts:
+        return {"manager": total_usage([]), "children": total_usage([]), "manager_turns": None}
+    root_id = transcripts[0]["info"]["id"]
+    roots = [t for t in transcripts if t["info"]["id"] == root_id]
+    others = [t for t in transcripts if t["info"]["id"] != root_id]
+    children = total_usage(others) if others else {"sessions": 0, **dict.fromkeys(
+        ("input", "output", "reasoning", "cache_read", "cache_write", "cost_usd"), 0)}
+    # total_usage keeps the last transcript for a duplicated session id; count turns from the same one.
+    turns = sum(1 for m in roots[-1]["messages"] if m.get("type") == "assistant" and "tokens" in m)
+    return {"manager": total_usage(roots), "children": children, "manager_turns": turns or None}
+
+
+def inspects_diff(command):
+    """True when any segment of a chained command is a content diff, not a stat or name list."""
+    unquoted = re.sub(r"'[^']*'|\"(?:\\.|[^\"\\])*\"", "''", command)
+    return any(re.match(r"\s*git\s+diff\b", segment) and
+               not re.search(r"--(?:stat|name-only|name-status)\b", segment)
+               for segment in re.split(r"&&|\|\||;|\n", unquoted))
+
+
 def tools(transcript):
     def nested(value, parent_time):
         if isinstance(value, dict):
@@ -152,9 +174,7 @@ def grade(transcripts, case, with_skill, worker, phase=None):
         exits = list(latest_checks.values())
         checks["manager_checks_succeeded"] = (False if any(code is not None and code != 0 for code in exits)
             else None if not exits or any(code is None for code in exits) else True)
-        checks["manager_inspects_changes"] = any(
-            re.match(r"\s*git\s+diff\b", s) and not re.search(r"--(?:stat|name-only|name-status)\b", s)
-            for s in commands) or any(
+        checks["manager_inspects_changes"] = any(inspects_diff(s) for s in commands) or any(
             t.get("name") in ("read", "read_file") and ".py" in str(t.get("state", {}).get("input", {})) for t in post)
         if not commands and any(t.get("name") == "execute" for t in post):
             checks["manager_runs_checks_after_workers"] = None
@@ -210,9 +230,7 @@ def grade(transcripts, case, with_skill, worker, phase=None):
                 for tool in sorted(tests_between, key=lambda t: t.get("time", {}).get("completed", float("-inf"))):
                     latest_between[tool["state"]["input"]["command"]] = tool
                 diff_tools, diff_unknown, diff_late = completed_between(calls, start, end, lambda t: shell(t) and
-                    re.match(r"\s*git\s+diff\b", t.get("state", {}).get("input", {}).get("command", "")) and
-                    not re.search(r"--(?:stat|name-only|name-status)\b",
-                                  t.get("state", {}).get("input", {}).get("command", "")))
+                    inspects_diff(t.get("state", {}).get("input", {}).get("command", "")))
                 diff_between = any(t.get("state", {}).get("status") == "completed" for t in diff_tools)
                 exits_between = list(latest_between.values())
                 codes_between = [t.get("state", {}).get("metadata", {}).get("exit") for t in exits_between]
