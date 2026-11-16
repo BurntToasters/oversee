@@ -4,7 +4,7 @@
 
 Version: `1.2.0`.
 
-Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, and the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode). The procedures and current gaps are in [evals/README.md](evals/README.md).
+Release status: preview. Live evidence is limited to OpenCode v2 runs (service-API prompts on Windows, and the 2.3.0 pilot on macOS), Codex app-server runs on Windows and macOS, and headless Claude Code runs of one case on macOS. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, and the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode). The procedures and current gaps are in [evals/README.md](evals/README.md).
 
 An [Agent Skill](https://agentskills.io) for a manager model to oversee worker subagents without micromanaging them. You choose any model and effort supported by your current harness; names in examples are not defaults or an allowlist.
 
@@ -17,7 +17,7 @@ The manager plans the work, dispatches independent pieces within available concu
 
 ## Compatibility
 
-The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md` plus `references/`. `npx skills add` keeps one copy in `~/.agents/skills/oversee` and links or copies it into the folders of the agents it detects. Model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
+The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md`, `references/`, and the Codex sidecar `agents/openai.yaml`. `npx skills add` keeps one copy in `~/.agents/skills/oversee` and links or copies it into the folders of the agents it detects. Model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
 
 Where each host reads the skill (global folders; several hosts read more than one, see [Host notes](#host-notes)):
 
@@ -52,11 +52,14 @@ npx skills add BurntToasters/oversee -g
 npx skills add BurntToasters/oversee -g -a claude-code -a codex -y   # pick agents, no prompts
 npx skills add BurntToasters/oversee -g --copy                       # copies instead of symlinks
 npx skills add BurntToasters/oversee                                 # this project only
-npx skills check && npx skills update oversee -g                     # update
+npx skills check                                                     # list available updates
+npx skills update oversee -g                                         # update
 npx skills remove oversee -g                                         # uninstall
 ```
 
-It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` is set. Review any skill before use; it runs with your agent's permissions.
+Don't chain `npx skills check && npx skills update`: `check` exits with code 1 when an update is available, so the update would never run.
+
+It installs only `skills/oversee/` (`SKILL.md`, `references/`, and the Codex sidecar `agents/openai.yaml`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` is set. Review any skill before use; it runs with your agent's permissions.
 
 ### Cline
 
@@ -102,7 +105,9 @@ Run `npx skills remove oversee -g`. If copies from the old scripts remain, remov
 
 ## Host notes
 
-- **Invocation controls.** The payload carries a behavioral guard. Host-enforced controls are optional and not installed: in Claude Code, set `skillOverrides.oversee` to `user-invocable-only` in your settings (the `disable-model-invocation: true` frontmatter key also works there, but the claude.ai packager rejects it, so the payload omits it); in Codex, an `agents/openai.yaml` sidecar with `policy.allow_implicit_invocation: false`. OpenCode v2 honors the shipped `metadata.opencode/autoinvoke: "false"`, which hides the skill from the model's list while `@oversee` still loads it.
+- **Invocation controls.** The payload carries a behavioral guard and two host switches. Codex reads the shipped `agents/openai.yaml` (`policy.allow_implicit_invocation: false`), so it never loads oversee on its own while `$oversee` still works. OpenCode v2 honors the shipped `metadata.opencode/autoinvoke: "false"`, which hides the skill from the model's list while `@oversee` still loads it. In Claude Code the control is optional and not installed: set `skillOverrides.oversee` to `user-invocable-only` in your settings. The `disable-model-invocation: true` frontmatter key also works there, and Cursor honors it too, but the claude.ai packager rejects it, so the payload omits it.
+- **Plan accept with cleared context.** When a host clears context on plan approval (Claude Code's `showClearContextOnPlanAccept` option), the new context must load oversee again. If you made the skill user-invocable only, or on OpenCode and Codex where the shipped switches stop the model loading it, type `/oversee` (`@oversee`, `$oversee`) after approving.
+- **claude.ai upload.** A skill uploaded to claude.ai syncs into Claude Code as `anthropic-skills:oversee`, next to the local `oversee`; `/oversee` runs the local one, but the model can pick either. Upload the whole `skills/oversee/` folder as a zip, re-upload after each update, or remove the upload if you install with the skills CLI.
 - **Duplicate discovery.** OpenCode v2 and Cursor read both `~/.agents/skills` and `~/.claude/skills` (OpenCode also `~/.config/opencode/skills`; Cursor also `~/.cursor/skills` and `~/.codex/skills`), so one skill can be discovered twice. In OpenCode the later-registered copy wins.
 - **Codex.** Skills are read from `.agents/skills` in each folder from the working directory up to the repository root, `~/.agents/skills`, and `/etc/codex/skills`; Codex follows symlinked skill folders. The skills listing is capped by `skills.max_context_tokens`.
 - **Kiro CLI.** `KIRO_HOME` overrides the global `~/.kiro` folder, but the skills CLI always writes `~/.kiro/skills`; if you set it, copy or link the skill into that profile's `skills` folder. The default agent finds skills automatically. A custom agent loads them only when its `resources` include `skill://` URIs (for example `skill://.kiro/skills/**/SKILL.md`), unless default resource inheritance is on. Workspace skills override same-name global skills.
@@ -138,14 +143,14 @@ Workers only implement. They never audit, review, map, or research a repository;
 
 A run ends with its report. Later requests in the same conversation, such as another codebase audit, are ordinary requests; they do not restart the workflow or reuse the earlier worker model. Invoke `/oversee` again to hand new work to workers.
 
-Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard; optional host-enforced invocation controls are listed under [Host notes](#host-notes) and are not installed automatically.
+Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard plus the Codex and OpenCode switches; the optional Claude Code control, which is not installed, is under [Host notes](#host-notes).
 
 ## How it works
 
 1. **Plan.** The manager inspects the project itself, restates the task, defines done with the project's real check commands, and splits the work into pieces with clear file ownership. Workers never research for the plan.
 2. **Brief.** Each worker gets a self-contained brief: goal, scope, constraints, definition of done, and the reporting format. Outcomes, not steps.
 3. **Dispatch and wait.** Independent workers go out together within host limits. Blocking waits and completion notices replace status polling. Necessary clarification, approval, and cancellation handling remain allowed.
-4. **Audit.** The manager compares staged, unstaged, and untracked changes against the initial snapshot, preserves existing user edits, runs acceptance checks itself, then runs integration checks.
+4. **Audit.** The manager compares staged, unstaged, untracked, and ignored changes against the initial snapshot, fails unauthorized worker commits, preserves existing user edits, runs acceptance checks itself, then runs integration checks.
 5. **Retry only failed pieces**, capped at two per piece, then escalate to the user.
 6. **Report the result only.** The report ends the run.
 
@@ -153,12 +158,19 @@ User/harness deadlines and cancellation stop further dispatch and request cancel
 
 ## Keeping runs cheap
 
-Oversee has not been shown to save tokens or money. The only measurement so far, the Go pilot in [evals/README.md](evals/README.md), cost more with oversee than a direct run, and the 1.2.0 changes are unmeasured. These points follow from how hosts resend and cache context:
+Oversee has not been shown to save tokens or money against working directly. The Go pilot in [evals/README.md](evals/README.md) cost more with oversee than a direct run. In one run per case on 2026-11-16, 1.2.0 cost 7-39% less than 1.1.1 in OpenCode. In headless Claude Code it cost about the same with background workers and 21% less once the manager blocked on its batch; the manager was 97-98% of the cost. These points follow from how hosts resend and cache context:
 
 - **The manager's context is the main recurring cost.** It is re-sent on every manager turn. In 1.2.0 the manager opens one host reference file instead of notes for all nine, and reads and prints only what its decisions need.
-- **Each worker completion is a manager turn, and caches expire.** Claude Code keeps the main conversation's prompt cache for 1 hour on a subscription and 5 minutes with an API key or usage credits, and a subagent's for 5 minutes (`promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`). A worker that outlasts the cache means the manager's whole context is written again at the cache-write price.
+- **Each worker completion is a manager turn, and caches expire.** Claude Code keeps the main conversation's prompt cache for 1 hour on a subscription and 5 minutes with an API key or usage credits (`promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`), and a subagent's for 5 minutes (`subagentPromptCacheTtl`, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`; both v2.1.242+). A worker that outlasts the cache means the manager's whole context is written again at the cache-write price. With an API key and workers that run longer than 5 minutes, `promptCacheTtl: "1h"` can be cheaper: a 1-hour write costs more than a 5-minute write but avoids repeating it.
 - **Each model has its own cache.** Switching model mid-session re-reads the whole history uncached. After a large planning session, save the plan to a file and start implementation in a fresh session that invokes oversee on that file (OpenCode: `@PLAN.md`; Claude Code: the `showClearContextOnPlanAccept` setting adds a clear-context option when you approve a plan).
+- **Let the manager block in Claude Code.** In `claude -p` the manager waits for its whole batch in one call. An interactive session cannot while fork mode is on (the default): each worker completion is a separate manager turn, and Claude Code asks for visible output when a turn ends silently. The Claude Code docs say setting `CLAUDE_CODE_FORK_SUBAGENT` to `0` lets Claude wait for subagents; this is untested with oversee.
 - **One small change is cheaper done directly.** Each piece has fixed overhead: a brief, a worker start, and an audit.
+
+### When another approach fits better
+
+- **Tightly coupled code.** Parallel agents make conflicting implicit decisions when the work cannot be split cleanly ([Cognition](https://cognition.com/blog/dont-build-multi-agents)), and Anthropic reports that multi-agent systems use about 15 times the tokens of a chat and that coding parallelizes less well than research ([Anthropic](https://www.anthropic.com/research/multi-agent-research-system)). Oversee's answer is manager-only planning, exclusive file ownership, decisions carried in each brief, and dependent pieces in later batches. If the work cannot be split that way, implement it directly.
+- **Claude Code `opusplan`.** The `opusplan` model setting plans with Opus and implements with Sonnet in one conversation, with no briefs or audit turns; each switch between plan and execution starts a fresh cache.
+- **API applications.** Anthropic's [advisor strategy](https://claude.com/resources/articles/the-advisor-strategy) inverts the roles: a cheaper executor runs the task and consults a larger advisor model only when needed.
 
 ### OpenCode v2 configuration sketch
 
@@ -190,9 +202,9 @@ Checked 2026-11-16 against the v2.3.0 docs source; verify against your installed
 - Focused reruns can select cases and one arm; they are marked unpaired. Regrading rejects retained projects that differ from their recorded final hashes.
 - Repo conventions and remaining verification gaps are in [`AGENTS.md`](AGENTS.md).
 
-The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code and Cursor remain documentation-checked until live-tested; Copilot, Cline, Antigravity, and Kiro CLI are best-effort and documentation-checked only.
+The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code has headless runs of one case plus two negative prompts; its interactive sessions and Cursor remain documentation-checked until live-tested; Copilot, Cline, Antigravity, and Kiro CLI are best-effort and documentation-checked only.
 
-The Go pilot and two focused follow-ups passed overseen coding checks, including Plan-to-Build handoff. They still emitted routine narration, so result-only compliance remains unproven. Measured results and retained failures are documented in [`evals/README.md`](evals/README.md).
+The Go pilot and two focused follow-ups passed overseen coding checks, including Plan-to-Build handoff. They still emitted routine narration. In the 2026-11-16 runs, 1.2.0 wrote no intermediate text in OpenCode or, once the manager blocked on its batch, in headless Claude Code; that is one run per case, so result-only compliance is observed, not established. Measured results and retained failures are documented in [`evals/README.md`](evals/README.md).
 
 ## License
 

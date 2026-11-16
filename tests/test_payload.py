@@ -25,15 +25,31 @@ class PayloadTests(unittest.TestCase):
     def test_layout_for_skills_cli(self):
         # `npx skills add` copies the whole skill folder, so it must hold only the payload.
         self.assertFalse((ROOT / "SKILL.md").exists())
-        self.assertEqual(sorted(p.name for p in PAYLOAD.iterdir()), ["SKILL.md", "references"])
+        self.assertEqual(sorted(p.name for p in PAYLOAD.iterdir()), ["SKILL.md", "agents", "references"])
         self.assertTrue(all(p.suffix == ".md" and p.is_file() for p in REFERENCES.iterdir()))
         self.assertIn("\nname: oversee\n", frontmatter())
+
+    def test_codex_sidecar_disables_implicit_invocation(self):
+        # Codex reads agents/openai.yaml; other hosts ignore it.
+        self.assertEqual([p.name for p in (PAYLOAD / "agents").iterdir()], ["openai.yaml"])
+        text = (PAYLOAD / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^policy:\n  allow_implicit_invocation: false$")
 
     def test_frontmatter_keys_and_description(self):
         keys = set(re.findall(r"(?m)^([A-Za-z][\w-]*):", frontmatter()))
         self.assertLessEqual(keys, SPEC_KEYS)
         description = re.search(r"(?m)^description: (.+)$", frontmatter())[1]
         self.assertLessEqual(len(description), 640)
+        compatibility = re.search(r"(?m)^compatibility: (.+)$", frontmatter())[1]
+        self.assertLessEqual(len(compatibility), 500)
+
+    def test_metadata_values_are_quoted_strings(self):
+        # Agent Skills spec: metadata maps string keys to string values.
+        block = frontmatter().split("\nmetadata:\n", 1)[1]
+        entries = re.findall(r"(?m)^  (\S+): (.+)$", block)
+        self.assertTrue(entries)
+        for key, value in entries:
+            self.assertRegex(value, r'^"[^"]*"$', key)
 
     def test_byte_budgets(self):
         self.assertLessEqual(len((PAYLOAD / "SKILL.md").read_bytes()), 13500)

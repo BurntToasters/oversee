@@ -21,16 +21,16 @@ Three limits hold for the whole conversation, including turns long after the ski
 
 **Invocation only.** A run starts when the user actually invokes the skill (`/oversee`, or the host's skill mention or picker) or explicitly asks for this workflow. Quoted examples, reviews or discussion of the skill, and ordinary requests do not start one.
 
-**Implementation only.** Workers exist to change the codebase: to implement a task, a ready plan, or fixes for findings. Their output can be checked against a diff and the project's tests, which is what makes a cheaper worker safe to use. Read-only work has no such check, so it is never worker work. Auditing or reviewing code, mapping or exploring a repository, research, investigation, and explanation all stay with you, whether the reading prepares a run or is the thing the user asked for.
+**Implementation only.** Workers exist to change the codebase: to implement a task, a ready plan, or fixes for findings. Their output can be checked against a diff and the project's tests, which makes a cheaper worker safe. Read-only work has no such check, so it is never worker work. Auditing or reviewing code, mapping or exploring a repository, research, investigation, and explanation all stay with you, whether the reading prepares a run or is the thing the user asked for.
 
 - A request for read-only work alone, such as `/oversee audit this repo`, has nothing to dispatch. Do it yourself as an ordinary request, give the findings, and mention that `/oversee` can implement the fixes.
 - A request for both, such as an audit followed by fixes, splits the same way. You audit, turn the actionable findings into pieces, and dispatch workers only for the fixes. Settle ambiguous findings and missing acceptance checks before dispatch.
 - If the user asks for workers to do the reading, do it yourself anyway and say so in one line.
 - Planning or exploration subagents the host launches itself are not oversee workers; they keep host defaults and never get the worker model or effort.
 
-**One run, then done.** A run ends when you deliver its final report, or when it is cancelled or stopped. After that you are no longer the manager, and this skill has nothing to say about the next message. Handle it the way you would if the skill had never loaded. The worker model and effort belonged to that run. They are not a standing preference for delegation; the only thing that may reuse them is a later oversee run that names no worker of its own.
+**One run, then done.** A run ends when you deliver its final report, or when it is cancelled or stopped. After that you are no longer the manager: handle the next message as if the skill had never loaded. The worker model and effort belonged to that run, not a standing preference for delegation; only a later oversee run that names no worker of its own may reuse them.
 
-So after a run, "audit the codebase", "review that change", or "how does this module work" is ordinary work for you, done with the host's normal tools and defaults. It is not a new run, and not a reason to send the earlier workers to read the repository. A later coding request is ordinary too, unless the user invokes the skill again or asks you to hand the work to workers.
+So after a run, "audit the codebase", "review that change", "how does this module work", or another coding request is ordinary work with the host's normal tools and defaults, not a new run and never a reason to send the earlier workers to read the repository. A new run needs a new invocation or an explicit request to hand the work to workers.
 
 ## 1. Read the invocation
 
@@ -60,22 +60,22 @@ An unavailable named model or effort is a choice to resolve, not a failed implem
 
 ## 4. Plan and baseline
 
-- Inspect the project and plan yourself; workers never research. Issue independent read-only commands together in one turn.
+- Inspect the project and plan yourself; workers never research. Run independent read-only commands as separate calls in one turn, never chained.
 - Define done as required behavior plus the project's real check commands from its documentation or CI, never invented. If nothing can verify the work, resolve verification before dispatch.
 - Split into a few useful pieces with exclusive file ownership. Shared-file edits and dependent pieces go in later batches. Queue pieces beyond concurrency limits without probing workers.
-- Before any worker starts, record a compact baseline: commit id and short status. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list. Hash untracked files. Never write snapshot files or print full diffs or whole files to build it. Without Git, hash the files. Never reset, stash, stage, or discard user edits; `git stash create` is not a stash.
-- Tell workers which existing edits to preserve. Refresh the comparison point after accepted batches; keep the original baseline for the final audit.
+- Before any worker starts, record a compact baseline: commit id and `git status --short --branch --ignored=matching -uall`. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list (empty output: use the commit id; if it fails, hash the dirty files). Hash untracked files. With no commit yet, or no Git, hash the files. Never write snapshot files or print full diffs or whole files to build it. Never reset, stash, stage, or discard user edits.
+- Refresh the comparison point after accepted batches; keep the original baseline for the final audit.
 
 ## 5. Brief each worker
 
-Use fresh context where supported; never rely on inherited history. Keep scope, constraints, and checks inline so the brief, and any fresh retry, stands alone:
+Use fresh context where supported. Keep scope, constraints, and checks inline so the brief, and any fresh retry, stands alone:
 
 - Goal and reason; files it may edit and must not touch.
-- Where to start: paths and symbols, not line numbers. A plan section may be cited by path as extra detail if the worker can read it.
+- Where to start: paths and symbols, not line numbers. Cite a readable plan section by path.
 - User requirements, plan decisions, existing edits and APIs to preserve, dependency/style constraints, permission boundaries.
-- Piece-scoped checks to run before reporting, expected behavior, and accepted dependencies; not the project-wide integration check, since parallel workers share the tree.
+- Piece-scoped checks, with the rule "Run each check exactly as written; never chain or append commands such as `; echo`"; expected behavior and accepted dependencies; not the project-wide integration check, since parallel workers share the tree.
 - Stop and report rather than widen scope. No commits, pushes, permission weakening, or further delegation unless explicitly authorized.
-- Scratch files and test temporary data stay in scope and are removed before reporting.
+- Keep scratch files and test data in scope; remove them before reporting.
 - "Your final message is the report", under 15 lines: `Changed` (paths), `Checks` (command and pass/fail, no logs), `Unfinished`, `Uncertain`.
 
 Describe outcomes, not steps, unless a step is a real constraint.
@@ -94,9 +94,9 @@ If native workers are unavailable, use a [headless fallback](references/headless
 
 Audit is your work, never a worker's. Check each finished batch against its briefs before dispatching the next:
 
-1. Read each report, then list changed paths for the whole workspace against the baseline: staged, unstaged, untracked, and deleted, including out-of-scope edits; never narrow it to a piece's files. Scope violations or leftover scratch files fail acceptance, never "harmless" notes.
-2. Read real diffs of changed paths against the baseline (on a dirty tree, `git diff <stash-create id>`); a `--stat` alone is insufficient. Read new untracked files whole, other whole files only where a diff cannot show behavior. Confirm user edits survived. Reports are not proof; do not read worker transcripts routinely.
-3. Run each piece's acceptance checks yourself with the runner's own quiet option, one check per command, no pipes or redirection, since a pipe's exit code hides a failing check. Accept the piece or record a specific failure.
+1. Read each report, then list changed paths for the whole workspace against the baseline: staged, unstaged, untracked, ignored, and deleted, including out-of-scope edits; never narrow it to a piece's files. Scope violations, unauthorized commits (HEAD or branch moved), or leftover scratch files (not caches or build output from checks) fail acceptance, never "harmless" notes.
+2. Read real diffs with `git diff <baseline id>` (the commit id, or the stash-create id on a dirty tree); plain `git diff` misses staged and committed edits, and `--stat` alone is insufficient. Read new untracked files whole, other whole files only where a diff cannot show behavior. Confirm user edits survived. Reports are not proof; do not read worker transcripts routinely.
+3. Run each piece's acceptance checks yourself with the runner's quiet option, one check per command, no pipes or redirection, since a pipe's exit code hides a failing check. Accept the piece or record a specific failure.
 4. Run the project's integration check after pieces pass; attribute failures to responsible pieces before retrying. Individual tests alone are not success.
 
 Retry only failed pieces, at most twice after the initial attempt. Resume the original worker if supported, sending the failing lines (not the log) and the required fix. A fresh worker receives the complete brief plus that failure evidence. Keep the chosen model and effort unless the user authorizes a change.

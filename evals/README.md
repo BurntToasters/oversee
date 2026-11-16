@@ -51,7 +51,9 @@ Entries 34-39 cover planning scope: the worker choice names who implements, not 
 
 Entries 40-44 cover the implementation-only scope added in 1.1.1: after a finished run, a later audit or coding request is an ordinary request and never reuses the earlier worker; an audit-only or repo-mapping invocation dispatches nothing; a new invocation on reported findings starts a new run. They are catalog-only. A live check needs a multi-turn session that keeps the finished run in context, which the current recorders do not drive.
 
-Entries 45-49 cover the 1.2.0 manager context-economy rules: a ready plan is not re-explored; the baseline is compact (no full diff dumped, no snapshot left behind); briefs give start pointers instead of pasted file contents and workers return the fixed `Changed`/`Checks`/`Unfinished`/`Uncertain` report; checks run quietly with their real exit code (no pipes); and staggered completion notices produce no text and no early audit. They are catalog-only, and the cost effect of these rules is unmeasured. Compare `usage_by_role.manager` against a regraded pre-1.2.0 run to measure it.
+Entries 45-49 cover the 1.2.0 manager context-economy rules: a ready plan is not re-explored; the baseline is compact (no full diff dumped, no snapshot left behind); briefs give start pointers instead of pasted file contents and workers return the fixed `Changed`/`Checks`/`Unfinished`/`Uncertain` report; checks run quietly with their real exit code (no pipes); and staggered completion notices produce no text and no early audit. They are catalog-only scenarios; the pilot comparison in "1.1.1 versus 1.2.0" below is the only cost measurement so far.
+
+Entries 50-54 cover the 1.2.0 baseline audit: a worker commit is caught by diffing against the baseline commit id (50); a repository with no commits is hashed (51); a new file inside an already-untracked folder is listed through `-uall` (52); a failing `git stash create`, as with Codex's read-only `.git`, falls back to hashes (53); and an explicitly authorized commit is not failed (54). All are catalog-only. Pilot fixtures are now committed before a run, and the OpenCode allowlist adds exactly `git rev-parse`, `git log`, `git stash create`, and `git hash-object` beside the existing `git status`, `git diff`, and `git ls-files` rules; `tests/test_fixtures.py` checks both. Retained evidence predates this and used uncommitted fixtures.
 
 The dependent manager-acceptance grading and Codex distinct-check/cleanup regressions are offline tooling checks against retained or synthetic evidence. They verify evaluator behavior and evidence persistence; they add no live proof that an agent honors dependency gates or cleans up its work.
 
@@ -115,9 +117,53 @@ Observed evidence is in `oversee-workspace/codex-smoke-1`, with derived review i
 
 The initial smoke exporter missed current child-event shapes; original projected `native.json` files contain incomplete child coverage. The derived review recovers children from retained native events and persisted contexts without additional inference. Original event evidence remains intact. The original Plan-phase snapshot was recorded as a driver-computed equality result; future runs retain the actual phase hashes too. Retry limits, dirty-workspace preservation, cancellation, and denied handoff still require controlled behavioral tests.
 
+## Codex 1.2.0 smoke tests (2026-11-16)
+
+Codex CLI 0.169.0 on macOS. `gpt-6.1-sol` is not in this account's model catalog, so the caller chose `gpt-5.6-terra` medium as manager and `gpt-6-luna` max as worker. Evidence: `oversee-workspace/codex-1.2.0`; derived review: `oversee-workspace/codex-1.2.0-reviewed`.
+
+All three cases passed behavior checks, exact manager and worker settings, and no status polling. The ordinary question left files unchanged, spawned no workers, and did not activate the skill (23 s). The parallel case ran two overlapping workers, took the `-uall` baseline, audited with `git diff <id>`, and had no narration (93 s). The dependent case used the native Plan-to-Default transition, sequenced its workers, and diffed and tested between them (251 s).
+
+The strict review still fails two items. First, the fixture prompts say `python -m unittest` and this Mac has only `python3`. In the parallel case the manager reported that verification could not run instead of trying `python3`. In the dependent case it reran the checks with `python3` and they passed, but the review keys checks by command text, so the failed `python` command still fails `manager_runs_successful_checks` and between-worker acceptance. Second, the dependent Plan phase opened with one sentence of narration before planning. Cost is unknown because Codex reports tokens only: the manager thread used 57% of parallel input tokens and 52% of dependent input tokens.
+
+The pilot prompts now use a `{python}` placeholder (`python3`, or `python` on Windows). The rerun of the parallel case (`codex-1.2.0-r2`, derived review `codex-1.2.0-r2-reviewed`) passed every strict check, including manager checks and silence, in 69 s; the manager thread used 51% of input tokens. The dependent case was not rerun.
+
+## 1.1.1 versus 1.2.0 (2026-11-16, macOS)
+
+Same settings for both versions, one with-skill run per case, no direct baseline arm. The 1.1.1 runs staged the `main` skill folder with the current runner and fixtures, so only the skill differs.
+
+OpenCode 2.3.0, `anthropic/claude-opus-5-5#medium` managing `opencode-go/deepseek-v4.1-flash#max`. Evidence: `oversee-workspace/pilot-1.1.1` and `pilot-1.2.0-r2`. Worker cost reads $0 because the Go provider reports no per-call cost; tokens are recorded.
+
+| Case | 1.1.1 cost / manager turns / manager cache read | 1.2.0 cost / turns / cache read | Silence |
+|---|---|---|---|
+| parallel | $0.3310 / 11 / 323,525 | $0.2021 / 9 / 180,606 | 1.1.1 fails, 1.2.0 passes |
+| plan-handoff | $0.3573 / 13 / 420,559 | $0.2984 / 12 / 294,457 | 1.1.1 fails, 1.2.0 passes |
+| explain | $0.1023 / 4 / 48,899 | $0.0954 / 4 / 48,930 | both pass |
+
+All six passed tests and behavior probes; the explain case dispatched no workers. 1.2.0 parallel fails `manager_checks_succeeded` only because the prompt's `python` is missing on this machine (exit 127); the manager reran the same check with `python3`, which passed.
+
+The first 1.2.0 attempt (`pilot-1.2.0`, interrupted after 31 minutes) found a defect: "Issue independent read-only commands together in one turn" led the manager to chain its baseline with `ls`, `cat`, and pipes; the allowlist denied the whole command, the manager concluded the shell was blocked and asked an unanswerable question. The wording now says separate calls, never chained, and `opencode.md` says a denied command blocks only that command. `pilot-1.2.0-r2` ran every command separately.
+
+Claude Code 2.1.325, `claude -p` with `--model claude-opus-5-5 --effort medium`, `/oversee haiku` on the parallel fixture with an unstaged README edit and an untracked file, `acceptEdits`, and an allowlist of `python3 -m unittest` and read-only git commands. Evidence: `oversee-workspace/cc-1.1.1`, `cc-1.2.0`, `cc-1.2.0-r2`, `cc-1.2.0-r3`, `cc-1.2.0-r4`, `cc-1.2.0-r5`, `cc-1.2.0-r6`, `cc-1.2.0-neg` (stream-json events plus final project).
+
+| Run | Total | Opus manager | Haiku workers | Intermediate manager text |
+|---|---|---|---|---|
+| 1.1.1 | $0.3337 | $0.3280 | $0.0058 | 2 messages; tried to write diff snapshots to `/tmp` (denied) |
+| 1.2.0 | $0.3261 | $0.3211 | $0.0050 | none; armed a 30-minute `ScheduleWakeup`, then cancelled it |
+| 1.2.0 rerun (fixes above, plus no wake-ups in `claude-code.md`) | $0.3251 | $0.3192 | $0.0058 | 3 messages, 2 of them after the host's "no visible output" prompt |
+| 1.2.0 third run (`claude-code.md` tells the manager to set `run_in_background: false`) | $0.2621 | $0.2553 | $0.0068 | none |
+| 1.2.0 fourth run (`CLAUDE_CODE_FORK_SUBAGENT=1`, so no `run_in_background`) | $0.3541 | $0.3483 | $0.0058 | `Waiting for 2 workers.`, then `Waiting for 1 worker.` |
+| 1.2.0 fifth run (blocking; `SKILL.md` asks for plain check commands) | $0.2727 | $0.2661 | $0.0066 | none |
+| 1.2.0 sixth run (blocking; the brief quotes the check rule) | $0.2544 | $0.2502 | $0.0042 | none |
+
+All six were correct, kept the user's edits, and left HEAD unchanged. The 1.2.0 runs used the `git stash create` id and `git diff <id>`. In the first two 1.2.0 runs the workers ran in the background, and each silent turn end made the host ask for visible output ("Your previous response had no visible output"), which forced narration and an extra manager turn; the rerun also spent a no-op `true` command on waiting. The `claude -p` `Agent` schema has `run_in_background`; in the third run the manager set it to `false` on both calls, blocked once, wrote only the worker line and the report, and cost 21% less than 1.1.1. The host prompt is not specific to `-p`: the 2.1.325 binary sends it once per query whenever a main-agent turn ends with no visible text, so interactive sessions with fork mode on (which cannot block) are still affected. `CLAUDE_CODE_FORK_SUBAGENT=1` removes `run_in_background` from the `-p` schema too (checked with a Haiku schema probe; `0` and unset keep it), so the fourth run reproduces that case headless: the manager launched both workers in one message, ended each waiting turn with the one fixed line from `claude-code.md`, got no host prompt, and wrote nothing else before the report. It costs 35% more than the blocking run because each completion notice costs a manager turn. An interactive session itself was not run. In runs one to five, workers appended `; echo "exit=$?"` to their checks, which the allowlist denied; the manager ran the checks itself. In the fifth run `SKILL.md` said "each one plain command": the manager wrote plain commands but did not pass the rule on, and one worker still appended `; echo`, then retried without it. `SKILL.md` now puts the rule in the brief as a quoted instruction. In the sixth run both briefs carried it, the workers ran their checks as written, and nothing was denied.
+
+Two negative prompts ran in the same fixture with the skill installed (`cc-1.2.0-neg`): an ordinary question about `right.py` and a question about a quoted `/oversee haiku: ...` command. Neither invoked the skill or spawned a worker, both answered directly, and the files were unchanged ($0.084 and $0.069).
+
+The manager is 97-98% of Claude Code cost here. One run per case on one machine: these are observations, not a savings guarantee.
+
 ## Other harnesses
 
-As of 2026-10-15, Claude Code and Copilot CLI were not found on PATH. Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed; standalone agent CLIs were not found on PATH or the checked common locations. Their GUI workflows were not exercised. No harness installers, account changes, or global skill installs were performed. Current [Antigravity skill docs](https://antigravity.google/docs/skills/) now confirm separate app and CLI global paths and automatic CLI slash commands; this resolves documentation uncertainty, not live discovery.
+As of 2026-10-15, Claude Code and Copilot CLI were not found on PATH (Claude Code 2.1.325 was run on macOS on 2026-11-16; see above). Cursor 3.24.18 and Antigravity app 2.23.1.0 are installed; standalone agent CLIs were not found on PATH or the checked common locations. Their GUI workflows were not exercised. No harness installers, account changes, or global skill installs were performed. Current [Antigravity skill docs](https://antigravity.google/docs/skills/) now confirm separate app and CLI global paths and automatic CLI slash commands; this resolves documentation uncertainty, not live discovery.
 
 For each remaining harness, stage the portable payload only in a throwaway workspace, select supported manager/worker settings, and run the three existing pilot prompts with equivalent acceptance checks. Preserve native events, exact resolved settings, before/after artifacts, and host mode transitions. Verify ordinary and quoted commands do not activate oversee. Run retry/cancellation/dirty-workspace/denied-handoff scenarios under controlled interaction. Record launch, authentication, permission, or schema blockers separately from skill failures. Do not add auto-approval flags to make a harness pass.
 

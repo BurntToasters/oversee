@@ -1,7 +1,7 @@
 # Parallel fixture
 
-Two independent functions, each with its own test file. Run:
+Two independent functions, each with its own test file. Run (`python` on Windows):
 
 ```bash
-python -m unittest discover -s tests -v
+python3 -m unittest discover -s tests -v
 ```

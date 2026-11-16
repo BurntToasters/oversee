@@ -1,0 +1,3 @@
+# Codex: load oversee only when invoked explicitly ($oversee or /skills).
+policy:
+  allow_implicit_invocation: false
