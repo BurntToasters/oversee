@@ -10,17 +10,24 @@ Install for every coding agent detected on this machine, globally:
 npx skills add BurntToasters/oversee -g
 ```
 
+To update:
+
+```bash
+npx skills update -g            # every globally installed skill
+npx skills update oversee -g    # only oversee
+```
+
 ### Customize the install:
 
 ```bash
 npx skills add BurntToasters/oversee -g -a claude-code -a codex -y   # pick agents, no prompts
 npx skills add BurntToasters/oversee -g --copy                       # copies instead of symlinks
 npx skills add BurntToasters/oversee                                 # this project only
-npx skills check && npx skills update oversee -g                     # update
+npx skills check                                                     # list available updates
 npx skills remove oversee -g                                         # uninstall
 ```
 
-It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` is set. Review any skill before use; it runs with your agent's permissions.
+It installs only `skills/oversee/` (`SKILL.md`, `references/`, and `agents/openai.yaml`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` is set. Review any skill before use; it runs with your agent's permissions.
 
 Switching from the old scripts: `npx skills remove oversee -g` does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. Delete the six script folders (`~/.agents/skills/oversee`, `~/.claude/skills/oversee`, `~/.cline/skills/oversee`, `~/.gemini/config/skills/oversee`, `~/.gemini/antigravity-cli/skills/oversee`, `~/.kiro/skills/oversee`) by hand, then run `npx skills add`. The README has bash and PowerShell commands.
 
@@ -34,6 +41,10 @@ Since skills CLI 1.8.0, Codex, Cursor, OpenCode, Copilot, and Cline are installe
 
 ### Changed
 
+- `SKILL.md` audit: the manager diffs with `git diff <baseline id>` (the commit id, or the `git stash create` id on a dirty tree), because plain `git diff` misses staged and committed worker edits. An unauthorized commit (HEAD or branch moved) fails acceptance. The baseline records the branch and `git status --short --branch --ignored=matching -uall`, so ignored scratch files are caught and a new file inside an already-untracked folder is listed instead of hidden behind `?? folder/`. An empty `git stash create` falls back to the commit id; if it fails (read-only `.git`, as in the Codex sandbox, or an unmerged index), the manager hashes the dirty files; a repository with no commits is hashed. Caches or build output from the checks are not scratch files. The post-run prose was shortened to stay within the byte budget.
+- Host references rechecked 2026-11-16. Claude Code: corrected model precedence (`CLAUDE_CODE_SUBAGENT_MODEL` ranks below the call and profile unless `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, which ignores the call; `CLAUDE_CODE_EFFORT_LEVEL` overrides call and profile effort); a newly created `agents` folder needs a restart; the `-p` background wait ceiling; `/tasks` shows the model and effort used; worker permission prompts and session-wide grants; `SendMessage` by agent ID; leave `isolation` and `name` unset, since a worktree branches from the default branch and a named call becomes an agent-teams teammate; a sandboxed session started in a subfolder may not write `.git`. Codex: required profile fields, headless `codex exec` is read-only unless `--sandbox workspace-write`, `workspace-write` keeps `.git`, `.agents`, and `.codex` read-only, and `--sandbox danger-full-access` and `--approve-for-me` join the never-add list. Cursor: two nesting levels (a worker can launch subagents; theirs cannot). OpenCode: checked against v2.3.0 source; a `<subagent>` notice follows each idle, including after a retry. Profiles created for a run stay out of the audited deliverable.
+- README: `npx skills check && npx skills update` never updated, because `check` exits 1 when an update exists; the commands are now separate. Added `DO_NOT_TRACK=1`, Claude Code subagent cache TTL settings and the 1-hour TTL tip, the cleared-context plan-accept note, and the claude.ai upload note.
+- Eval fixtures are committed before a run, and the OpenCode allowlist adds exactly `git rev-parse`, `git log`, `git stash create`, and `git hash-object`, so the manager can follow the 1.2.0 baseline rules. Staging copies the whole skill folder. Scenario 46 now expects the `git stash create` id.
 - The single harness reference is split into one file per host under `references/` (`claude-code.md`, `codex.md`, `opencode.md`, `cursor.md`, `copilot.md`, `antigravity.md`, `cline.md`, `kiro.md`, `headless.md`). A run opens only its host's file instead of notes for every host.
 - `SKILL.md` context-economy rules: a ready plan is not re-explored; the baseline is compact (commit id or path list with hashes, no full diffs, no snapshot left behind); briefs give start pointers and piece-scoped checks, and workers return fixed `Changed`/`Checks`/`Unfinished`/`Uncertain` reports; the manager waits for the whole current batch without text, audits from a whole-workspace path list and real diffs, and runs checks quietly with one check per command and no pipes. Silence is stated structurally: between the worker-choice line and the report, turns contain tool calls only. Three rules from the old reference moved into `SKILL.md`: an unsupported `max` is not the highest level, an unverified setting is never claimed as honored, and global configuration is never changed to enable dispatch.
 - Corrected host facts: OpenCode v2 has an optional per-call `model` (`provider/model#variant`) and, in v2.3.0, always runs subagents in the background with a completion notice; Claude Code interactive sessions cannot block on workers, and a finished worker can be resumed with its history.
@@ -47,12 +58,25 @@ Since skills CLI 1.8.0, Codex, Cursor, OpenCode, Copilot, and Cline are installe
 
 ### Added
 
+- `agents/openai.yaml` in the payload with `policy.allow_implicit_invocation: false`, so Codex loads oversee only through `$oversee` or `/skills` (owner Decision 9).
+- Catalog-only eval scenarios 50 (`worker-commit-detected`), 51 (`no-commit-baseline`), 52 (`untracked-directory-edit`), 53 (`stash-create-blocked`), and 54 (`authorized-worker-commit`), and `tests/test_fixtures.py`, which checks that pilot fixtures are committed and allow the baseline commands.
+- README section "When another approach fits better": tightly coupled code, Claude Code `opusplan`, and Anthropic's advisor strategy, with sources.
 - `tests/test_payload.py`: payload layout, frontmatter keys, byte budgets, reference links, no removed file names, and local links and anchors in README, AGENTS.md, and `docs/hosts.md`.
 - CI: `.github/workflows/tests.yml` runs the unit tests and `bump-ver.py --check` on Linux and Windows. `.gitattributes` sets LF for all text files.
 - Catalog-only eval scenarios 45-49 for the context-economy rules.
 - README section "Keeping runs cheap".
 
-The cost effect of these changes is not yet measured.
+### Fixed
+
+- `SKILL.md`: "Issue independent read-only commands together in one turn" led managers in OpenCode and Claude Code to chain baseline commands into one shell line, which an allowlist denies as a whole; in OpenCode the manager then stalled on a question. Commands now run as separate calls, never chained. `opencode.md`: a denied command blocks only that command. `claude-code.md`: no `ScheduleWakeup`, `Monitor`, no-op command, or loop as a waiting fallback.
+- `claude-code.md`: where the `Agent` schema has `run_in_background` (`claude -p`, the Agent SDK, or fork mode off), the manager sets it to `false` on every call of the batch and blocks once. Before, workers ran in the background, each silent turn end drew the host's "no visible output" prompt, and the manager narrated. In an interactive session that cannot block, a waiting turn now ends with the one line `Waiting for N workers.` instead of no text (owner Decision 15 exception). A headless run with `CLAUDE_CODE_FORK_SUBAGENT=1`, which removes `run_in_background`, printed only those lines and drew no host prompt; an interactive session was not run.
+- `cline.md`: a headless Cline prompt run auto-approves every tool by default; the note now says to pass `--auto-approve false` instead of only warning against adding the flag. `copilot.md`: `security-review` and `rubber-duck` are host helpers.
+- `SKILL.md`: workers appended `; echo "exit=$?"` to their checks, which an allowlist denies. The brief now carries the rule "Run each check exactly as written; never chain or append commands such as `; echo`". With only "plain command" in `SKILL.md`, the manager wrote plain commands but did not pass the rule on, and a worker still appended `; echo`. With the quoted rule, both briefs carried it and the workers had no denials.
+- Eval pilots: the parallel and plan-handoff prompts used `python -m unittest`, which fails where only `python3` exists (macOS). They now use a `{python}` placeholder that the OpenCode and Codex runners fill with `python` on Windows and `python3` elsewhere. The fixture READMEs say `python3` and note `python` for Windows.
+
+### Measured
+
+One with-skill run per case, 2026-11-16, same settings for both versions (details in `evals/README.md`). OpenCode 2.3.0 with Opus 5.5 medium managing DeepSeek V4.1 Flash max: parallel $0.331 → $0.202, plan handoff $0.357 → $0.298, ordinary question $0.102 → $0.095; 1.2.0 passed the silence check in both coding cases, 1.1.1 failed both. Claude Code 2.1.325 (`claude -p`, Opus 5.5 medium managing Haiku): $0.334 → $0.325 with background workers, where the host prompted for visible output after each silent turn end and silence failed; $0.262 once the manager blocked on its batch with `run_in_background: false`, with no intermediate text; $0.354 with fork mode on, which cannot block, using the one-line waiting message; $0.254 blocking, after the worker check rule above. The manager is 97-98% of cost. Codex 0.169.0 (1.2.0 only, `gpt-5.6-terra` medium managing `gpt-6-luna` max): all three smoke cases passed behavior and exact settings, and the parallel case passed silence; after the `python3` prompt fix, the parallel case passed every strict check. Cost is unknown. Not a savings guarantee.
 
 ## 1.1.1
 

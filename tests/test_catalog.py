@@ -33,6 +33,18 @@ class CatalogTests(unittest.TestCase):
         for name in CATALOG["pilot"]:
             self.assertNotRegex(by_name[name]["prompt"], r"(?<!\S)-v(?!\S)", name)
 
+    def test_pilot_checks_use_platform_python(self):
+        from evals.run import PYTHON, fill_prompt
+        by_name = {e["name"]: e for e in EVALS}
+        for name in CATALOG["pilot"]:
+            prompt = by_name[name]["prompt"]
+            # A bare `python` fails where only `python3` exists (macOS), so checks use the placeholder.
+            self.assertNotRegex(prompt, r"(?<![\w{])python -m", name)
+            filled = fill_prompt(prompt, "Example Worker")
+            self.assertNotIn("{", filled, name)
+            if "-m unittest" in prompt:
+                self.assertIn(f"{PYTHON} -m unittest", filled, name)
+
     def test_only_pilot_or_scenario_execution(self):
         for entry in EVALS:
             self.assertIn(entry["execution"], {"pilot", "scenario"}, entry["name"])
@@ -46,7 +58,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_only_worker_placeholder_used(self):
         for entry in EVALS:
-            self.assertEqual(set(re.findall(r"\{[^}]*\}", entry["prompt"])) - {"{worker}"}, set(), entry["name"])
+            self.assertEqual(set(re.findall(r"\{[^}]*\}", entry["prompt"])) - {"{worker}", "{python}"}, set(), entry["name"])
 
     def test_negative_cases_present(self):
         negatives = [e["name"] for e in EVALS if e["name"].startswith("negative-") or e["name"] == "quoted-trigger"]
@@ -74,6 +86,17 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(by_id[number]["name"], name)
             self.assertEqual(by_id[number]["execution"], "scenario", name)
             self.assertEqual(by_id[number]["fixture"], "notes-cli", name)
+
+    def test_baseline_audit_cases_present(self):
+        by_id = {e["id"]: e for e in EVALS}
+        for number, name in [(50, "worker-commit-detected"), (51, "no-commit-baseline"),
+                             (52, "untracked-directory-edit"), (53, "stash-create-blocked"),
+                             (54, "authorized-worker-commit")]:
+            self.assertEqual(by_id[number]["name"], name)
+            self.assertEqual(by_id[number]["execution"], "scenario", name)
+            self.assertEqual(by_id[number]["fixture"], "notes-cli", name)
+        self.assertIn("git stash create", " ".join(by_id[46]["expectations"]))
+
 
 if __name__ == "__main__":
     unittest.main()

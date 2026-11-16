@@ -24,6 +24,12 @@ else:
                           usage_by_role)
 
 ROOT = Path(__file__).resolve().parents[1]
+# macOS and many Linux systems ship only `python3`; Windows installs `python`.
+PYTHON = "python" if os.name == "nt" else "python3"
+
+
+def fill_prompt(prompt, worker):
+    return prompt.replace("{worker}", worker).replace("{python}", PYTHON)
 
 
 class Blocked(Exception):
@@ -214,24 +220,35 @@ def snapshot(directory, *, legacy=False):
                         for s in p.relative_to(directory).parts)}
 
 
+# Baseline commands the skill asks the manager to run; exact prefixes, no broader git access.
+BASELINE_COMMANDS = ["git rev-parse*", "git log*", "git stash create*", "git hash-object*"]
+
+
+def init_repo(project):
+    """Commit the fixture so the manager has a commit id and `git stash create` works, as in a real repository."""
+    subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.name=oversee-eval", "-c", "user.email=eval@example.invalid",
+                    "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "baseline"],
+                   cwd=project, check=True, capture_output=True)
+
+
 def fixture(output, case, with_skill):
     project = output / "project"
     shutil.copytree(ROOT / "evals" / "fixtures" / case["fixture"], project)
     (project / ".gitignore").write_text("__pycache__/\n*.pyc\n.notes.json\n.opencode/\nopencode.json\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    init_repo(project)
     if with_skill:
         skill = project / ".opencode/skills/oversee"
         skill.mkdir(parents=True)
-        shutil.copyfile(ROOT / "skills/oversee/SKILL.md", skill / "SKILL.md")
-        shutil.copytree(ROOT / "skills/oversee/references", skill / "references")
+        shutil.copytree(ROOT / "skills/oversee", skill, dirs_exist_ok=True)
     # Same explicit permissions in both arms; no --auto or changes to the real profile.
     rules = [{"action": action, "resource": "*", "effect": "deny"}
              for action in ["external_directory", "webfetch", "websearch", "shell"]]
     rules += [{"action": "shell", "resource": command, "effect": "allow"}
               # `git -C <path> diff` is not allowed: a mid-pattern wildcard could admit write commands.
               for command in ["python *", "python3 *", "git status*", "git diff*", "git --no-pager diff*",
-                              "git ls-files*"]]
+                              "git ls-files*", *BASELINE_COMMANDS]]
     config = {"$schema": "https://opencode.ai/config.json", "permissions": rules,
               "agents": {"general": {"permissions": rules}, "build": {"permissions": rules}}}
     write_json(project / "opencode.json", config)
@@ -276,7 +293,7 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
     deadline = None if deadline_seconds is None else started + deadline_seconds
     raw = []
     try:
-        prompt = case["prompt"].replace("{worker}", selector(worker))
+        prompt = fill_prompt(case["prompt"], selector(worker))
         if not with_skill:
             prompt = prompt.replace("/oversee " + selector(worker) + ":", "").replace("/oversee " + selector(worker), "")
             prompt += ("\nDo not delegate." if case["name"] == "explain" else
