@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from evals.evidence import final_text, grade, plan_phase_checks, skill_loaded, tools, total_usage
+from evals.evidence import (changed_paths, final_text, grade, inspects_diff, is_check_command, plan_phase_checks,
+                            skill_loaded, tools, total_usage, usage_by_role)
 from evals.review import review
 from evals.run import Blocked, OpenCode, main, provider_blocker, resolve, retain_interrupted, run_case, snapshot
 
@@ -52,6 +53,19 @@ class EvidenceTests(unittest.TestCase):
         calls[-1]["state"]["metadata"]["exit"] = 0
         self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
 
+    def test_missing_interpreter_is_not_a_failed_check(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        missing = {"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"command": "python -m unittest"}, "output": "zsh:1: command not found: python",
+            "metadata": {"exit": 127}}}
+        working = {"type": "tool", "name": "shell", "time": {"created": 6}, "state": {
+            "status": "completed", "input": {"command": "python3 -m unittest"}, "metadata": {"exit": 0}}}
+        root["messages"][0]["content"] = [missing, working]
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+        # With no working run, nothing establishes that the checks passed.
+        root["messages"][0]["content"] = [missing]
+        self.assertIsNone(grade([root, child], "parallel", True, WORKER)["checks"]["manager_checks_succeeded"])
+
     def test_usage_deduplicates_sessions_not_messages(self):
         root, child = transcript(), transcript("child", "root")
         root["messages"] = [{"type": "assistant", "cost": 999, "tokens": {"input": 999}}]
@@ -68,6 +82,178 @@ class EvidenceTests(unittest.TestCase):
         self.assertIsNone(usage["input"])
         self.assertIsNone(usage["cost_usd"])
         self.assertIsNone(total_usage([])["output"])
+
+    def test_usage_by_role_splits_root_from_children(self):
+        root, child = transcript(), transcript("child", "root")
+        root["messages"].append({"type": "assistant", "content": []})
+        root["messages"].append({"type": "assistant", "tokens": {"input": 1}})
+        split = usage_by_role([root, child, copy.deepcopy(root)])
+        self.assertEqual(split["manager"]["sessions"], 1)
+        self.assertEqual(split["manager"]["input"], 5)
+        self.assertEqual(split["children"]["sessions"], 1)
+        self.assertEqual(split["children"]["cache_read"], 2)
+        self.assertEqual(split["manager_turns"], 2)
+        self.assertEqual(set(split["manager"]), set(total_usage([root])))
+
+    def test_usage_by_role_without_children_or_measurements(self):
+        split = usage_by_role([transcript()])
+        self.assertEqual(split["children"]["sessions"], 0)
+        self.assertEqual(split["children"]["input"], 0)
+        self.assertEqual(split["children"]["cost_usd"], 0)
+        root, child = transcript(), transcript("child", "root")
+        root["messages"] = [{"type": "assistant", "content": []}]
+        del child["info"]["tokens"]
+        split = usage_by_role([root, child])
+        self.assertIsNone(split["manager"]["input"])
+        self.assertIsNone(split["children"]["input"])
+        self.assertIsNone(split["manager_turns"])
+
+    def test_chained_inspection_commands_count_as_diff(self):
+        self.assertTrue(inspects_diff("git status --short && git diff"))
+        self.assertTrue(inspects_diff("git status --short; git diff -- notes.py"))
+        self.assertTrue(inspects_diff("git status --short\ngit diff"))
+        self.assertFalse(inspects_diff("git status --short && git diff --stat"))
+        self.assertFalse(inspects_diff("echo git diff"))
+        self.assertFalse(inspects_diff('python -c "x=1; git diff"'))
+        # Shell wrappers are unwrapped; quoted text elsewhere stays blanked.
+        self.assertTrue(inspects_diff("sh -c 'true && git diff'"))
+        self.assertFalse(inspects_diff("echo 'sh -c git diff'"))
+        self.assertTrue(inspects_diff("git status --short || git diff"))
+        self.assertTrue(inspects_diff("git diff -- 'my file.py'"))
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"][0]["content"] = [{"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"command": "git status --short && git diff"}, "metadata": {"exit": 0}}}]
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_inspects_changes"])
+        root["messages"][0]["content"][0]["state"]["input"]["command"] = "git diff --stat"
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["manager_inspects_changes"])
+
+    def test_diff_matcher_accepts_global_options_and_rejects_summaries_and_pipes(self):
+        for command in ["git --no-pager diff", "git -C 'my repo' diff -- left.py", "git -c core.pager=cat diff HEAD",
+                        "/bin/bash -lc 'git --no-pager diff'", "git diff --cached"]:
+            self.assertTrue(inspects_diff(command), command)
+        for flag in ["--stat", "--shortstat", "--numstat", "--dirstat", "--summary", "--name-only",
+                     "--name-status", "--quiet", "--exit-code"]:
+            self.assertFalse(inspects_diff("git diff " + flag), flag)
+        for command in ["git diff | head", "git diff > out.txt", "git diff-tree HEAD", "git difftool",
+                        "git -C repo commit -m diff"]:
+            self.assertFalse(inspects_diff(command), command)
+        self.assertTrue(inspects_diff("git diff | head; git diff"))
+
+    def test_check_matcher_requires_one_unpiped_unittest_run(self):
+        for command in ["python -m unittest", "python3 -B -m unittest discover -s tests -q", "py -m unittest",
+                        "python3.12 -X dev -m unittest tests.test_left", "python.exe -m unittest",
+                        "/usr/bin/python3 -m unittest -q", "bash -lc 'python -m unittest -q'",
+                        '/bin/sh -c "python -B -m unittest discover -s tests -q"']:
+            self.assertTrue(is_check_command(command), command)
+        for command in ["python -m unittest | tail", "python -m unittest || true", "python -m unittest && git diff",
+                        "git diff; python -m unittest", "python -m unittest > out.txt", "python -m unittest 2>&1",
+                        "python -m unittest < in", "python -c \"print('-m unittest')\"", "echo python -m unittest",
+                        "python script.py -m unittest", "bash -lc 'python -m unittest' | tail",
+                        "bash -lc 'python -m unittest | tail'"]:
+            self.assertFalse(is_check_command(command), command)
+
+    def test_piped_check_does_not_count_as_manager_check(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"][0]["content"] = [{"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"command": "python -m unittest discover -s tests | tail -3"},
+            "metadata": {"exit": 0}}}]
+        checks = grade([root, child], "parallel", True, WORKER)["checks"]
+        self.assertFalse(checks["manager_runs_checks_after_workers"])
+        self.assertIsNone(checks["manager_checks_succeeded"])
+        root["messages"][0]["content"][0]["state"]["input"]["command"] = "python -m unittest discover -s tests -q"
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_runs_checks_after_workers"])
+
+    def test_read_counts_as_inspection_only_for_changed_paths(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"][0]["content"] = [{"type": "tool", "name": "read", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"filePath": "/tmp/run/project/left.py"}}}]
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["manager_inspects_changes"])
+        changed = changed_paths({"left.py": "a", "right.py": "b"}, {"left.py": "a", "right.py": "c"})
+        self.assertEqual(changed, {"right.py"})
+        self.assertFalse(grade([root, child], "parallel", True, WORKER, changed=changed)["checks"]["manager_inspects_changes"])
+        changed = changed_paths({"left.py": "a"}, {"left.py": "z"})
+        self.assertTrue(grade([root, child], "parallel", True, WORKER, changed=changed)["checks"]["manager_inspects_changes"])
+
+    def test_silence_passes_with_notice_tool_only_turns_and_final_report(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        tool = lambda t: {"type": "tool", "name": "shell", "time": {"created": t}, "state": {
+            "status": "completed", "input": {"command": "git diff"}, "metadata": {"exit": 0}}}
+        root["messages"] = [
+            {"type": "user", "content": []},
+            {"type": "assistant", "time": {"created": 1}, "content": [
+                {"type": "text", "text": "Workers: worker-v4.1 max."}, {"type": "tool", "name": "subagent"}]},
+            {"type": "assistant", "time": {"created": 5}, "content": [tool(5)]},
+            {"type": "assistant", "time": {"created": 6}, "content": [tool(6)]},
+            {"type": "assistant", "time": {"created": 7}, "content": [{"type": "text", "text": "Changed left.py.\nChecks: pass."}]}]
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+        # The plan shown at the end of an earlier user turn is exempt too.
+        planned = copy.deepcopy(root)
+        planned["messages"][0:0] = [{"type": "user", "content": []}, {"type": "assistant", "time": {"created": 0},
+                                    "content": [{"type": "text", "text": "Plan:\n1. left\n2. right"}]}]
+        self.assertTrue(grade([planned, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+
+    def test_mid_turn_keyword_text_is_narration(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"] = [
+            {"type": "assistant", "time": {"created": 5}, "content": [
+                {"type": "text", "text": "Now auditing (no permission issues)."},
+                {"type": "tool", "name": "shell", "state": {"status": "completed", "input": {"command": "git diff"}}}]},
+            {"type": "assistant", "time": {"created": 7}, "content": [{"type": "text", "text": "Done."}]}]
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+        # Waiting on the user at the end of a turn is allowed.
+        root["messages"][0]["content"][0]["text"] = "Blocked: permission needed."
+        root["messages"].insert(1, {"type": "user", "content": []})
+        root["messages"][0]["content"].reverse()
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+
+    def test_final_report_must_follow_last_tool_and_worker_idle(self):
+        root, child = transcript(), transcript("child", "root", created=2, idle=8)
+        root["messages"] = [{"type": "assistant", "time": {"created": 7}, "content": [
+            {"type": "text", "text": "Done."}]}]
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+        root["messages"][0]["time"]["created"] = 9
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+        root["messages"].append({"type": "assistant", "time": {"created": 10}, "content": [
+            {"type": "tool", "name": "shell", "state": {"status": "completed", "input": {"command": "git diff"}}}]})
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["no_observed_routine_narration"])
+
+    def test_usage_by_role_splits_helpers_workers_and_grandchildren_with_root_not_first(self):
+        root, worker = transcript(), transcript("worker", "root")
+        helper = transcript("helper", "root")
+        helper["info"]["agent"] = "explore"
+        grandchild = transcript("grandchild", "worker")
+        split = usage_by_role([helper, worker, root, grandchild], "root")
+        self.assertEqual(split["manager"]["sessions"], 1)
+        self.assertEqual(split["workers"]["sessions"], 2)
+        self.assertEqual(split["helpers"]["sessions"], 1)
+        self.assertEqual(split["children"]["sessions"], 3)
+        self.assertEqual(split["children"]["input"], split["workers"]["input"] + split["helpers"]["input"])
+        # Without a stored id the parentless transcript is the root.
+        self.assertEqual(usage_by_role([helper, worker, root, grandchild])["manager"], split["manager"])
+        self.assertEqual(usage_by_role([root])["helpers"]["sessions"], 0)
+        checks = grade([helper, worker, root], "parallel", True, WORKER, root_id="root")["checks"]
+        self.assertTrue(checks["exact_worker_settings"])
+
+    def test_dependent_windows_sort_with_missing_idle(self):
+        root = transcript()
+        first, second = transcript("first", "root", created=1, idle=None), transcript("second", "root", created=1, idle=None)
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertFalse(checks["dependent_workers_sequenced"])
+
+    def test_dependent_acceptance_accepts_chained_diff(self):
+        root = transcript()
+        first = transcript("first", "root", created=1, idle=2)
+        second = transcript("second", "root", created=3, idle=4)
+        root["messages"][0]["content"] = [
+            {"type": "tool", "name": "shell", "time": {"created": 2.2, "ran": 2.3, "completed": 2.4}, "state": {
+                "status": "completed", "input": {"command": "python -m unittest tests.test_first"},
+                "metadata": {"exit": 0}}},
+            {"type": "tool", "name": "shell", "time": {"created": 2.5, "ran": 2.6, "completed": 2.7}, "state": {
+                "status": "completed", "input": {"command": "git status --short && git diff"}, "metadata": {"exit": 0}}}]
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertTrue(checks["dependent_manager_acceptance_between_workers"])
 
     def test_authentication_defaults_are_not_measured_zero_usage(self):
         root = transcript()
@@ -232,6 +418,44 @@ class EvidenceTests(unittest.TestCase):
                 review(source, output)
             check.assert_not_called()
             self.assertFalse(output.exists())
+
+
+    def test_review_skips_incomplete_case_and_keys_on_stored_root(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "run"
+            for name, complete in (("with_skill", True), ("without_skill", False)):
+                case = source / "explain" / name
+                (case / "project").mkdir(parents=True)
+                (case / "project" / "store.py").write_text("x = 1\n")
+                (case / "session.json").write_text(json.dumps({"snapshot_version": 2, "root": "root", "id": "root",
+                    "with_skill": True, "worker": WORKER, "manager": WORKER}))
+                child, root = transcript("child", "root"), transcript()
+                root["messages"][0]["content"] = [{"type": "text", "text": "final words"}]
+                (case / "native.json").write_text(json.dumps([child, root]))
+                (case / "baseline.json").write_text(json.dumps(snapshot(case / "project")))
+                if complete:
+                    (case / "after.json").write_text(json.dumps(snapshot(case / "project")))
+            output = Path(folder) / "reviewed"
+            note = io.StringIO()
+            with patch("evals.review.correctness", return_value={"behavior_passed": True}), \
+                    contextlib.redirect_stdout(note):
+                results = review(source, output)
+            self.assertEqual(len(results), 1)
+            self.assertIn("Skipping incomplete", note.getvalue())
+            self.assertEqual(results[0]["usage_by_role"]["manager"]["sessions"], 1)
+            self.assertTrue(results[0]["orchestration"]["checks"]["exact_manager_settings"])
+            self.assertEqual((output / "explain/with_skill/final_response.md").read_text(), "final words\n")
+
+    def test_collect_repeats_until_child_set_is_stable(self):
+        api = object.__new__(OpenCode)
+        listings = {"root": [[{"id": "a"}], [{"id": "a"}, {"id": "b"}], [{"id": "a"}, {"id": "b"}]]}
+        waits = []
+        with patch.object(api, "wait", side_effect=lambda sid, deadline=None: waits.append(sid)), \
+                patch.object(api, "children", side_effect=lambda sid: listings.get(sid, [[]]).pop(0) if listings.get(sid) else []), \
+                patch.object(api, "operation", side_effect=lambda names, sid: {"data": transcript(sid)}):
+            raw = api.collect("root")
+        self.assertEqual([t["info"]["id"] for t in raw], ["root", "a", "b"])
+        self.assertEqual(waits.count("root"), 3)
 
 
 class ResolutionTests(unittest.TestCase):

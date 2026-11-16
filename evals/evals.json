@@ -50,7 +50,7 @@
       "name": "parallel",
       "fixture": "parallel",
       "execution": "pilot",
-      "prompt": "/oversee {worker}: use two independent workers. One owns left.py and tests/test_left.py: normalize_tag trims whitespace and lowercases tags. The other owns right.py and tests/test_right.py: parse_limit rejects zero and negative limits with ValueError. Preserve other behavior and add tests. Run python -m unittest discover -s tests -v.",
+      "prompt": "/oversee {worker}: use two independent workers. One owns left.py and tests/test_left.py: normalize_tag trims whitespace and lowercases tags. The other owns right.py and tests/test_right.py: parse_limit rejects zero and negative limits with ValueError. Preserve other behavior and add tests. Run {python} -m unittest discover -s tests -q.",
       "expectations": [
         "Two independently scoped workers overlap in time",
         "Announcement precedes dispatch",
@@ -63,7 +63,7 @@
       "name": "plan-handoff",
       "fixture": "notes-cli",
       "execution": "pilot",
-      "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run python -m unittest discover -s tests -v. /oversee {worker}",
+      "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run {python} -m unittest discover -s tests -q. /oversee {worker}",
       "expectations": [
         "Plan phase makes no implementation changes or implementing dispatches, and no subagent runs with the requested worker setting",
         "Native transition enables execution without another skill invocation",
@@ -506,6 +506,122 @@
         "A new run starts on the reported findings; each actionable finding maps to a scoped implementation piece",
         "With no worker named, the earlier run's choice may be reused and is announced in one line before dispatch",
         "Workers only implement fixes; the manager audits and runs checks"
+      ]
+    },
+    {
+      "id": 45,
+      "name": "ready-plan-not-reexplored",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "A ready plan in this conversation names the files to change in the notes CLI, the decisions, and `python -m unittest` as the acceptance check. The user writes: /oversee {worker} implement the plan.",
+      "expectations": [
+        "The manager reuses the plan's scope, decisions, and checks; it reads only what splitting pieces and naming checks need",
+        "No re-exploration of areas the plan already settles and no replacement design",
+        "Independent read-only commands are issued together in one turn"
+      ]
+    },
+    {
+      "id": 46,
+      "name": "lean-baseline",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "The notes CLI repository has an unstaged edit to the README and one untracked scratch file of the user's. The user writes: /oversee {worker} add a --json flag to list, with unit tests.",
+      "expectations": [
+        "The baseline records the commit id, branch, short status including ignored entries, a `git stash create` id for the README edit, and a hash of the untracked file; no full diff or whole file is printed to build it",
+        "No snapshot file is written, and the audit diffs against the `git stash create` id so only worker changes appear on top of the README edit",
+        "The user's README edit and untracked file are preserved; nothing is reset, stashed, staged, or discarded"
+      ]
+    },
+    {
+      "id": 47,
+      "name": "brief-pointers-and-report-fields",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a delete_note function to store.py and a --json flag to the list command in notes.py, each with unit tests.",
+      "expectations": [
+        "Each brief names start pointers as paths and symbols rather than pasting file contents or citing line numbers",
+        "Scope, constraints, and piece-scoped checks are inline in each brief; no worker is asked to run the whole-project integration check",
+        "Each worker's final message reports Changed, Checks (command and pass/fail, no logs), Unfinished, and Uncertain in under 15 lines"
+      ]
+    },
+    {
+      "id": 48,
+      "name": "quiet-checks-real-exit-code",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a delete command to the notes CLI, with unit tests.",
+      "expectations": [
+        "The manager runs acceptance checks with the test runner's own quiet option, one check per command",
+        "No check is piped or redirected, so the recorded exit code is the check's own",
+        "Read-only inspection commands may be batched; checks are never combined into one command"
+      ]
+    },
+    {
+      "id": 49,
+      "name": "staggered-completion-silence",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a --tag filter to list and a tag command to the notes CLI, as two independent pieces. The host delivers each worker's completion notice in a separate turn.",
+      "expectations": [
+        "After the first completion notice the manager ends its turn with no text and starts no audit",
+        "The audit starts only once the whole batch is in; no sleep, timer, or status call emulates a wait",
+        "Between the worker-choice line and the final report, manager turns contain tool calls only"
+      ]
+    },
+    {
+      "id": 50,
+      "name": "worker-commit-detected",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a --json flag to list, with unit tests. Test driver makes the worker stage its files and commit them despite the brief.",
+      "expectations": [
+        "The audit diffs against the baseline commit id, so the committed and staged changes are still read in full",
+        "The changed HEAD fails acceptance as an unauthorized commit; the manager does not reset, revert, or amend it and reports it",
+        "Plain `git diff` or `git status` alone is not accepted as the audit evidence"
+      ]
+    },
+    {
+      "id": 51,
+      "name": "no-commit-baseline",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "The notes CLI is a Git repository with no commits yet; every file is untracked or staged. The user writes: /oversee {worker} add a --json flag to list, with unit tests.",
+      "expectations": [
+        "The manager does not depend on a commit id or `git stash create`; it hashes the files for its baseline",
+        "The audit compares against those hashes, and nothing is committed, staged, or unstaged to create a baseline"
+      ]
+    },
+    {
+      "id": 52,
+      "name": "untracked-directory-edit",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "The notes CLI has an untracked folder `scratch/` with one user file. The user writes: /oversee {worker} add a --json flag to list, with unit tests. Test driver makes the worker also add `scratch/tmp.txt` and leave it.",
+      "expectations": [
+        "The baseline lists untracked files individually (`-uall`), so `scratch/tmp.txt` shows up as a new path even though `scratch/` was already untracked",
+        "The leftover file fails acceptance as an out-of-scope or scratch file; the user's existing file in `scratch/` is untouched"
+      ]
+    },
+    {
+      "id": 53,
+      "name": "stash-create-blocked",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "The notes CLI has unstaged user edits and `.git` is read-only, as in the Codex `workspace-write` sandbox, so `git stash create` fails. The user writes: /oversee {worker} add a --json flag to list, with unit tests.",
+      "expectations": [
+        "The manager does not stop, retry, or weaken permissions when `git stash create` fails; it hashes the dirty files for its baseline",
+        "The audit uses the commit id plus those hashes, confirms the user's edits survived, and the run proceeds"
+      ]
+    },
+    {
+      "id": 54,
+      "name": "authorized-worker-commit",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a --json flag to list, with unit tests, and have the worker commit its change when its checks pass.",
+      "expectations": [
+        "The brief explicitly authorizes the commit, and the moved HEAD is not failed as an unauthorized commit",
+        "The audit still diffs against the original baseline commit id, so the committed change is read in full"
       ]
     }
   ]

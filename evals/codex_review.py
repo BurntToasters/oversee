@@ -6,7 +6,12 @@ from pathlib import Path
 import re
 
 from .codex_run import Codex, export
+from .evidence import inspects_diff, interpreter_missing, is_check_command, mentions
 from .run import ROOT, correctness, snapshot, write_json
+
+HELPER_TYPES = {"explorer"}
+# Items that are neither tools nor worker activity; a turn's final text may follow them.
+PASSIVE_ITEMS = {"agentMessage", "userMessage", "reasoning", "plan"}
 
 
 def completed_items(events, root):
@@ -16,19 +21,65 @@ def completed_items(events, root):
             and event["message"]["params"].get("threadId") == root]
 
 
-def _unittest_invocation(command):
-    pattern = r"python(?:3)?(?:\.exe)?\s+(?:-B\s+)?-m\s+unittest\b"
-    wrapper = re.match(
-        r"(?:\"[^\"]*(?:powershell|pwsh)\.exe\"|'[^']*(?:powershell|pwsh)\.exe')\s+-Command\s+(['\"])",
-        command, re.I)
-    body = command[wrapper.end():].rstrip() if wrapper else command
-    if wrapper and body.endswith(wrapper.group(1)):
-        body = body[:-1].rstrip()
-    if re.search(r"&&|\|\||\|", body):
-        return False
-    body = body.strip()
-    last_command = re.split(r"[;\r\n]+", body)[-1].strip()
-    return bool(re.match(r"^" + pattern, last_command, re.I))
+# Shared with the OpenCode grader: one unittest run, wrappers unwrapped, no chains/pipes/redirects.
+_unittest_invocation = is_check_command
+
+
+def _agent_types(events, records):
+    """Best-effort agent type per thread from thread records, turn contexts, or spawn items."""
+    keys = ("agentRole", "agentType", "agent_role", "agent_type")
+    found = {}
+    def pick(data):
+        return next((data[k] for k in keys if isinstance(data.get(k), str)), None)
+    for record in records:
+        sources = [record.get("thread", {})] + [c.get("payload", {}) for c in record.get("turn_contexts", [])]
+        kind = next((pick(s) for s in sources if pick(s)), None)
+        if kind:
+            found[record["thread"]["id"]] = kind.lower()
+    for event in events:
+        item = event.get("message", {}).get("params", {}).get("item", {})
+        kind = pick(item)
+        if not kind and isinstance(item.get("arguments"), str):
+            try:
+                kind = pick(json.loads(item["arguments"]))
+            except (ValueError, AttributeError):
+                kind = None
+        for sid in [item.get("agentThreadId"), *item.get("receiverThreadIds", [])]:
+            if kind and sid:
+                found.setdefault(sid, kind.lower())
+    return found
+
+
+def _silence(events, root, worker):
+    """Per turn only the last text, after the turn's last tool/worker item, is exempt; plus one notice."""
+    turns, current = [], []
+    for event in events:
+        message = event.get("message", {})
+        params = message.get("params", {})
+        if event.get("direction") != "received" or params.get("threadId") != root:
+            continue
+        if message.get("method") == "item/completed":
+            current.append(params["item"])
+        elif message.get("method") == "turn/completed":
+            turns.append(current)
+            current = []
+    turns = [t for t in [*turns, current] if t]
+    narration, notices, final_ok = [], 0, False
+    for number, turn in enumerate(turns):
+        texts = [i for i, item in enumerate(turn) if item.get("type") == "agentMessage"]
+        end = texts[-1] if texts and all(i.get("type") in PASSIVE_ITEMS for i in turn[texts[-1] + 1:]) else None
+        if number == len(turns) - 1:
+            final_ok = end is not None
+        for index in texts:
+            content = turn[index].get("text", "")
+            if index == end:
+                continue
+            if (mentions(content, worker["model"]) and mentions(content, worker["effort"])
+                    and len(content.strip().splitlines()) == 1 and notices == 0):
+                notices += 1
+            else:
+                narration.append(content)
+    return not narration and final_ok
 
 
 def _unittest_success_output(output):
@@ -42,7 +93,8 @@ def _latest_checks(items):
     checks = {}
     for item in items:
         command = item.get("command", "")
-        if _unittest_invocation(command):
+        # A command the shell could not start ran no test; a later working form decides.
+        if _unittest_invocation(command) and not interpreter_missing(item.get("exitCode"), item.get("aggregatedOutput")):
             checks[command] = item
     if not checks:
         return False
@@ -62,6 +114,11 @@ def _latest_checks(items):
     return False if False in outcomes else None if None in outcomes else True
 
 
+def _shows_diff(item):
+    return (item.get("status") == "completed" and inspects_diff(item.get("command", ""))
+            and "diff --git" in str(item.get("aggregatedOutput") or ""))
+
+
 def _command_items(items, after=float("-inf"), before=float("inf")):
     return [(when, item) for when, item in items if after <= when < before
             and item.get("type") == "commandExecution"]
@@ -70,7 +127,9 @@ def _command_items(items, after=float("-inf"), before=float("inf")):
 def grade(events, records, meta, case):
     root, manager, worker = meta["root"], meta["manager"], meta["worker"]
     items = completed_items(events, root)
-    descendants = [r for r in records if r["thread"]["id"] != root]
+    types = _agent_types(events, records)
+    helper = lambda sid: types.get(sid) in HELPER_TYPES
+    descendants = [r for r in records if r["thread"]["id"] != root and not helper(r["thread"]["id"])]
     def exact(record, setting):
         contexts = record["turn_contexts"]
         return bool(contexts) and all(c["payload"].get("model") == setting["model"] and
@@ -82,53 +141,45 @@ def grade(events, records, meta, case):
         explanation = "\n".join(i["text"] for i in text).lower()
         activated = any(i["type"] == "userMessage" and any(c.get("type") == "skill" and
             c.get("name") == "oversee" for c in i.get("content", [])) for _, i in items)
-        checks.update(no_workers=not descendants, no_skill_activation=not activated,
+        checks.update(no_workers=not [r for r in records if r["thread"]["id"] != root], no_skill_activation=not activated,
                       accurate_explanation=all(s in explanation for s in (".notes.json", "id", "title", "body")))
     else:
         checks["exact_worker_settings"] = bool(descendants) and all(exact(r, worker) for r in descendants)
         starts, ends = {}, {}
         for when, item in items:
-            if item["type"] == "subAgentActivity":
+            if item["type"] == "subAgentActivity" and not helper(item.get("agentThreadId")):
                 if item["kind"] == "started":
                     starts.setdefault(item["agentThreadId"], when)
                 elif item["kind"] == "completed":
                     ends[item["agentThreadId"]] = when
-        checks["two_workers"] = len(starts) == 2
+        # Extra spawns are retries of a failed piece; two pieces need at least two worker spawns.
+        checks["two_workers"] = len(starts) >= 2
         first, last = min(starts.values(), default=float("inf")), max(ends.values(), default=float("inf"))
         checks["announcement_before_dispatch"] = any(when <= first and item["type"] == "agentMessage" and
             worker["model"] in item["text"] and re.search(r"\b" + re.escape(worker["effort"]) + r"\b", item["text"], re.I)
             for when, item in items) and bool(starts)
         audits = [i for _, i in _command_items(items, after=last)]
         checks["manager_runs_successful_checks"] = _latest_checks(audits)
-        checks["manager_inspects_changes"] = any(i.get("status") == "completed" and "git diff" in i["command"] and
-            "diff --git" in i.get("aggregatedOutput", "") for i in audits)
+        checks["manager_inspects_changes"] = any(_shows_diff(i) for i in audits)
         checks["no_observed_status_polling"] = not any(i["type"] == "collabAgentToolCall" and
             i.get("tool") in ("list_agents", "status", "list") for _, i in items)
-        notices, narration = 0, []
-        for item in text:
-            if item.get("phase") == "final_answer":
-                continue
-            content = item["text"]
-            if worker["model"] in content and worker["effort"] in content.lower() and notices == 0:
-                notices += 1
-            elif not re.search(r"\b(blocked|permission|clarif\w*|cancel\w*|plan mode|default mode)\b", content, re.I):
-                narration.append(content)
-        checks["no_observed_routine_narration"] = not narration
-        windows = [(a, ends[sid]) for sid, a in starts.items() if sid in ends]
+        checks["no_observed_routine_narration"] = _silence(events, root, worker)
+        windows = sorted((a, ends[sid]) for sid, a in starts.items() if sid in ends)
         if case == "parallel":
-            checks["parallel_overlap"] = len(windows) == 2 and max(a for a, _ in windows) < min(b for _, b in windows)
+            checks["parallel_overlap"] = any(a < d and c < b for i, (a, b) in enumerate(windows)
+                                             for c, d in windows[i + 1:])
         else:
-            windows.sort()
-            checks["dependent_workers_sequenced"] = len(windows) == 2 and windows[0][1] <= windows[1][0]
-            if len(windows) == 2:
-                between = [i for _, i in _command_items(items, after=windows[0][1], before=windows[1][0])]
+            checks["dependent_workers_sequenced"] = len(windows) >= 2 and all(
+                b <= c for (_, b), (c, _) in zip(windows, windows[1:]))
+            # With retries, acceptance holds when some gap between consecutive spawns shows it.
+            outcomes = []
+            for (_, end), (start, _) in zip(windows, windows[1:]):
+                between = [i for _, i in _command_items(items, after=end, before=start)]
                 passed = _latest_checks(between)
-                inspected = any(i.get("status") == "completed" and "git diff" in i.get("command", "") and
-                                "diff --git" in i.get("aggregatedOutput", "") for i in between)
-                checks["dependent_manager_acceptance_between_workers"] = (
-                    False if passed is False or not inspected else None if passed is None else True)
-            else:
-                checks["dependent_manager_acceptance_between_workers"] = False
+                inspected = any(_shows_diff(i) for i in between)
+                outcomes.append(False if passed is False or not inspected else None if passed is None else True)
+            checks["dependent_manager_acceptance_between_workers"] = (
+                True if True in outcomes else None if None in outcomes else False)
             modes = [c["payload"].get("collaboration_mode", {}).get("mode") for c in root_record["turn_contexts"]]
             checks["native_mode_transition"] = modes == ["plan", "default"]
     outcomes = [e["message"]["params"]["turn"]["status"] for e in events
@@ -137,21 +188,43 @@ def grade(events, records, meta, case):
     return {"verified": all(v is True for v in checks.values()), "checks": checks}
 
 
-def usage(events, records):
+# cacheWriteInputTokens may be absent from Codex token totals; a missing field stays None, never a failure.
+FIELDS = {"input": "inputTokens", "output": "outputTokens", "reasoning": "reasoningOutputTokens",
+          "cache_read": "cachedInputTokens", "cache_write": "cacheWriteInputTokens"}
+
+
+def _measured(events):
     measured = {}
     for event in events:
         message = event["message"]
         if event["direction"] == "received" and message.get("method") == "thread/tokenUsage/updated":
             params = message["params"]
             measured[params["threadId"]] = params["tokenUsage"]["total"]
-    ids = {r["thread"]["id"] for r in records}
-    fields = {"input": "inputTokens", "output": "outputTokens", "reasoning": "reasoningOutputTokens",
-              "cache_read": "cachedInputTokens", "cache_write": "cacheWriteInputTokens"}
+    return measured
+
+
+def _totals(measured, ids):
     result = {"sessions": len(ids), "cost_usd": None}
-    for label, field in fields.items():
+    for label, field in FIELDS.items():
         values = [measured.get(sid, {}).get(field) for sid in ids]
         result[label] = sum(values) if values and all(v is not None for v in values) else None
     return result
+
+
+def usage(events, records):
+    return _totals(_measured(events), {r["thread"]["id"] for r in records})
+
+
+def usage_by_role(events, records, root):
+    """Split usage into root, worker, and helper (explorer) threads; events hold cumulative totals."""
+    measured = _measured(events)
+    types = _agent_types(events, records)
+    others = {r["thread"]["id"] for r in records} - {root}
+    helpers = {sid for sid in others if types.get(sid) in HELPER_TYPES}
+    # Codex reports no cost, so cost stays None even for an empty group.
+    group = lambda ids: _totals(measured, ids) if ids else {"sessions": 0, "cost_usd": None, **dict.fromkeys(FIELDS, 0)}
+    return {"manager": _totals(measured, {root}), "children": group(others), "workers": group(others - helpers),
+            "helpers": group(helpers), "manager_turns": None}
 
 
 def main():
@@ -194,7 +267,8 @@ def main():
                     for e in events[:first_execution])
                 orchestration["verified"] = all(v is True for v in orchestration["checks"].values())
             report = {"case": folder.name, "correctness": proof, "orchestration": orchestration,
-                      "usage": usage(events, records), "elapsed_seconds": json.loads((folder / "result.json").read_text())["elapsed_seconds"]}
+                      "usage": usage(events, records),
+                      "usage_by_role": usage_by_role(events, records, meta["root"]), "elapsed_seconds": json.loads((folder / "result.json").read_text())["elapsed_seconds"]}
             destination = output / folder.name
             destination.mkdir()
             write_json(destination / "native.json", records)

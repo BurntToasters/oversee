@@ -17,11 +17,19 @@ import urllib.parse
 import urllib.request
 
 if __package__:
-    from .evidence import final_text, grade, plan_phase_checks, total_usage
+    from .evidence import (changed_paths, final_text, grade, plan_phase_checks, root_transcript, total_usage,
+                           usage_by_role)
 else:
-    from evidence import final_text, grade, plan_phase_checks, total_usage
+    from evidence import (changed_paths, final_text, grade, plan_phase_checks, root_transcript, total_usage,
+                          usage_by_role)
 
 ROOT = Path(__file__).resolve().parents[1]
+# macOS and many Linux systems ship only `python3`; Windows installs `python`.
+PYTHON = "python" if os.name == "nt" else "python3"
+
+
+def fill_prompt(prompt, worker):
+    return prompt.replace("{worker}", worker).replace("{python}", PYTHON)
 
 
 class Blocked(Exception):
@@ -141,12 +149,17 @@ class OpenCode:
             query = {"parentID": session, "limit": "100", "cursor": cursor}
 
     def collect(self, session, deadline=None):
-        self.wait(session, deadline)
-        descendants = []
-        for child in self.children(session):
-            descendants.extend(self.collect(child["id"], deadline))
-        if descendants:
+        # A parent may resume and spawn more children after earlier ones finish: repeat until stable.
+        known, descendants = None, []
+        while True:
             self.wait(session, deadline)
+            children = self.children(session)
+            ids = {child["id"] for child in children}
+            if ids == known or (known is None and not ids):
+                break
+            known, descendants = ids, []
+            for child in children:
+                descendants.extend(self.collect(child["id"], deadline))
         root = self.operation("experimental.session.export|session.export", session)["data"]
         return [root, *descendants]
 
@@ -207,22 +220,38 @@ def snapshot(directory, *, legacy=False):
                         for s in p.relative_to(directory).parts)}
 
 
+# Baseline commands the skill asks the manager to run; exact prefixes, no broader git access.
+BASELINE_COMMANDS = ["git rev-parse*", "git log*", "git stash create*", "git hash-object*"]
+# Test runs and the notes CLI only; a bare `python *` would also admit `python -c <code>`.
+PYTHON_COMMANDS = [f"{python}{flags} {target}*" for python in ("python", "python3")
+                   for flags in ("", " -B") for target in ("-m unittest", "notes.py")]
+
+
+def init_repo(project):
+    """Commit the fixture so the manager has a commit id and `git stash create` works, as in a real repository."""
+    subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.name=oversee-eval", "-c", "user.email=eval@example.invalid",
+                    "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify", "-m", "baseline"],
+                   cwd=project, check=True, capture_output=True)
+
+
 def fixture(output, case, with_skill):
     project = output / "project"
     shutil.copytree(ROOT / "evals" / "fixtures" / case["fixture"], project)
     (project / ".gitignore").write_text("__pycache__/\n*.pyc\n.notes.json\n.opencode/\nopencode.json\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    init_repo(project)
     if with_skill:
         skill = project / ".opencode/skills/oversee"
         skill.mkdir(parents=True)
-        shutil.copyfile(ROOT / "skills/oversee/SKILL.md", skill / "SKILL.md")
-        shutil.copytree(ROOT / "skills/oversee/references", skill / "references")
+        shutil.copytree(ROOT / "skills/oversee", skill, dirs_exist_ok=True)
     # Same explicit permissions in both arms; no --auto or changes to the real profile.
     rules = [{"action": action, "resource": "*", "effect": "deny"}
              for action in ["external_directory", "webfetch", "websearch", "shell"]]
     rules += [{"action": "shell", "resource": command, "effect": "allow"}
-              for command in ["python *", "python3 *", "git status*", "git diff*", "git ls-files*"]]
+              # `git -C <path> diff` is not allowed: a mid-pattern wildcard could admit write commands.
+              for command in [*PYTHON_COMMANDS, "git status*", "git diff*", "git --no-pager diff*",
+                              "git ls-files*", *BASELINE_COMMANDS]]
     config = {"$schema": "https://opencode.ai/config.json", "permissions": rules,
               "agents": {"general": {"permissions": rules}, "build": {"permissions": rules}}}
     write_json(project / "opencode.json", config)
@@ -261,13 +290,13 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
     session = api.operation("session.create", data={"location": {"directory": str(project)},
                             "title": "oversee-eval " + case["name"] + (" with skill" if with_skill else " baseline"),
                             "agent": agent, "model": manager})["data"]["id"]
-    write_json(output / "session.json", {"id": session, "manager": manager, "worker": worker,
+    write_json(output / "session.json", {"id": session, "root": session, "manager": manager, "worker": worker,
                                         "version": api.version, "with_skill": with_skill, "snapshot_version": 2})
     started = time.monotonic()
     deadline = None if deadline_seconds is None else started + deadline_seconds
     raw = []
     try:
-        prompt = case["prompt"].replace("{worker}", selector(worker))
+        prompt = fill_prompt(case["prompt"], selector(worker))
         if not with_skill:
             prompt = prompt.replace("/oversee " + selector(worker) + ":", "").replace("/oversee " + selector(worker), "")
             prompt += ("\nDo not delegate." if case["name"] == "explain" else
@@ -289,7 +318,7 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
         if failure:
             raise Blocked(f"{failure['type']}: {failure['message']}")
         if case["name"] == "plan-handoff":
-            phase = plan_phase_checks(raw, snapshot(project) == before, worker, manager)
+            phase = plan_phase_checks(raw, snapshot(project) == before, worker, manager, session)
             write_json(output / "plan-phase.json", {"checks": phase, "transcripts": raw})
             if any(v is False for v in phase.values()):
                 raise Blocked("Plan phase modified project files, started implementing workers, or used the worker choice.")
@@ -307,18 +336,21 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
             print("Partial evidence recovery failed: " + str(cleanup_error), file=sys.stderr)
         raise
     write_json(output / "native.json", raw)
-    (output / "final_response.md").write_text(final_text(raw[0]) + "\n", encoding="utf-8")
+    root = root_transcript(raw, session)
+    (output / "final_response.md").write_text(final_text(root) + "\n", encoding="utf-8")
     after = snapshot(project)
     write_json(output / "after.json", after)
     proof = correctness(project, case["name"])
     if case["name"] == "explain":
         proof["project_unchanged"] = before == after
     report = {"case": case["name"], "with_skill": with_skill,
-              "correctness": proof, "orchestration": grade(raw, case["name"], with_skill, worker, phase),
-              "elapsed_seconds": time.monotonic() - started, "usage": total_usage(raw)}
+              "correctness": proof, "orchestration": grade(raw, case["name"], with_skill, worker, phase,
+                                                           session, changed_paths(before, after)),
+              "elapsed_seconds": time.monotonic() - started, "usage": total_usage(raw),
+              "usage_by_role": usage_by_role(raw, session)}
     report["orchestration"]["checks"]["exact_manager_settings"] = any(
-        m.get("type") == "assistant" for m in raw[0]["messages"]) and all(
-        m.get("model") == manager for m in raw[0]["messages"] if m.get("type") == "assistant")
+        m.get("type") == "assistant" for m in root["messages"]) and all(
+        m.get("model") == manager for m in root["messages"] if m.get("type") == "assistant")
     report["orchestration"]["verified"] = all(v is True for v in report["orchestration"]["checks"].values())
     write_json(output / "result.json", report)
     return report

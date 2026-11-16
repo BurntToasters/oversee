@@ -2,18 +2,18 @@
 name: oversee
 description: Run /oversee to implement coding work through worker subagents, such as a task, a ready plan, or findings to fix. The manager plans, briefs workers, waits without polling, then checks their changes and runs the checks itself. Implementation only. Never use it to audit, review, map, research, or explain a codebase, and a finished run does not carry over to later requests. Activate only for an actual /oversee invocation, the host's equivalent skill selection, or an explicit request to oversee delegated coding work. Discussing the skill, quoting invocations, and ordinary coding questions do not activate it.
 license: MIT
-compatibility: Requires native subagents or a headless CLI that can preserve the session's permissions. Implementation requires the host's execution mode. Harness details live in references/harnesses.md.
+compatibility: Requires native subagents or a headless CLI that can preserve the session's permissions. Implementation requires the host's execution mode. Host details live in references/.
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   opencode/slash: "true"
   opencode/autoinvoke: "false"
 ---
 
 # Oversee
 
-Oversee is a way to implement coding work. You are the manager: you plan, brief worker subagents, dispatch them, wait, audit what they changed, and report. The workers write the code. Your context goes to decisions and verification, not to writing the code or supervising workers. Never change your own model.
+Oversee is a way to implement coding work. You are the manager: you plan, brief and dispatch worker subagents, wait, audit their changes, and report. The workers write the code. Never change your own model.
 
-Work quietly. The user wants the result, and each progress message costs them attention and you tokens. Outside a required handoff or a real blocker, write exactly one worker-choice line before the first dispatch, then only the final report. Do not narrate setup, model resolution, launched or finished workers, or audit progress.
+Everything you read or print stays in your context and is re-read every later turn: read only what decisions need. Write no preamble: one worker-choice line before the first dispatch, then only the final report. Turns between them contain tool calls only, no text. Required handoff, clarification, blocker, and cancellation messages, and announcing an authorized worker change, are the exceptions. If compaction drops these rules or your host reference, reopen them.
 
 ## When this skill applies
 
@@ -21,89 +21,90 @@ Three limits hold for the whole conversation, including turns long after the ski
 
 **Invocation only.** A run starts when the user actually invokes the skill (`/oversee`, or the host's skill mention or picker) or explicitly asks for this workflow. Quoted examples, reviews or discussion of the skill, and ordinary requests do not start one.
 
-**Implementation only.** Workers exist to change the codebase: to implement a task, a ready plan, or fixes for findings. Their output can be checked against a diff and the project's tests, which is what makes a cheaper worker safe to use. Read-only work has no such check, so it is never worker work. Auditing or reviewing code, mapping or exploring a repository, research, investigation, and explanation all stay with you, whether the reading prepares a run or is the thing the user asked for.
+**Implementation only.** Workers exist to change the codebase: to implement a task, a ready plan, or fixes for findings. Their output can be checked against a diff and the project's tests, which makes a cheaper worker safe. Read-only work has no such check, so it is never worker work. Auditing or reviewing code, mapping or exploring a repository, research, investigation, and explanation all stay with you, whether the reading prepares a run or is the thing the user asked for.
 
 - A request for read-only work alone, such as `/oversee audit this repo`, has nothing to dispatch. Do it yourself as an ordinary request, give the findings, and mention that `/oversee` can implement the fixes.
 - A request for both, such as an audit followed by fixes, splits the same way. You audit, turn the actionable findings into pieces, and dispatch workers only for the fixes. Settle ambiguous findings and missing acceptance checks before dispatch.
 - If the user asks for workers to do the reading, do it yourself anyway and say so in one line.
-- Subagents the host launches on its own for planning or exploration are not oversee workers. They keep the host's defaults and never receive the worker model or effort.
+- Planning or exploration subagents the host launches itself are not oversee workers; they keep host defaults and never get the worker model or effort.
 
-**One run, then done.** A run ends when you deliver its final report, or when it is cancelled or stopped. After that you are no longer the manager, and this skill has nothing to say about the next message. Handle it the way you would if the skill had never loaded. The worker model and effort belonged to that run. They are not a standing preference for delegation; the only thing that may reuse them is a later oversee run that names no worker of its own.
+**One run, then done.** A run ends when you deliver its final report, or when it is cancelled or stopped. After that you are no longer the manager: handle the next message as if the skill had never loaded. The worker model and effort belonged to that run, not a standing preference for delegation; only a later oversee run that names no worker of its own may reuse them.
 
-So after a run, "audit the codebase", "review that change", or "how does this module work" is ordinary work for you, done with the host's normal tools and defaults. It is not a new run, and not a reason to send the earlier workers to read the repository. A later coding request is ordinary too, unless the user invokes the skill again or asks you to hand the work to workers.
+So after a run, "audit the codebase", "review that change", "how does this module work", or another coding request is ordinary work with the host's normal tools and defaults, not a new run and never a reason to send the earlier workers to read the repository. A new run needs a new invocation or an explicit request to hand the work to workers.
 
 ## 1. Read the invocation
 
-- `/oversee <task>` starts a run on that task. Bare `/oversee` takes the ready plan or the unfinished implementation work already in this conversation, such as findings waiting to be fixed. If there is neither, ask what to oversee.
-- The invocation may name any worker model and effort, in any natural form: shorthand, a multiword name, effort before model, "use X", before or after the task. Use the current model catalog and the task context to separate the worker choice from the task; ask if it is ambiguous. An invocation that names only a worker uses the existing plan or work.
-- Reuse a ready plan's scope, decisions, and acceptance checks. Do not replace it with a new design. Resolve only gaps that prevent dispatch.
-- If workers from this run already exist, retain their ownership and pending results instead of launching duplicate work.
-- For one small change, explain that direct implementation is cheaper and offer it; do not silently abandon the requested manager/worker roles.
-- The same invocation works in either mode. Outside Plan mode, plan the task yourself, then dispatch now. In Plan mode, follow section 2.
+- `/oversee <task>` runs that task. Bare `/oversee` takes the ready plan or unfinished implementation work in this conversation, such as findings to fix; with neither, ask what to oversee.
+- The invocation may name any worker model and effort in any natural form (shorthand, multiword, effort first, "use X", before or after the task). Separate it from the task using the catalog and context; ask if ambiguous. A worker-only invocation uses the existing plan or work.
+- Reuse a ready plan's scope, decisions, and acceptance checks. Do not replace it with a new design or re-explore what it settles; read only what splitting pieces, naming checks, and closing blocking gaps need.
+- If this run's workers already exist, keep their ownership and pending results; launch no duplicates.
+- For one small change, say direct implementation is cheaper and offer it; do not silently drop the requested roles.
+- Outside Plan mode, plan yourself and dispatch now; in Plan mode, follow section 2.
 
 ## 2. Plan-mode handoff
 
-Check the host's active mode before implementation. In Plan mode the invocation sets who implements after approval; it does not change how the plan is made. Inspect the project yourself, settle the design, prepare pieces and briefs, and retain the plan, worker choice, acceptance checks, and pending dispatch in the conversation or the host's allowed plan artifact. State in the plan that implementation runs under oversee with that worker, so it survives a host that implements from the plan in fresh context. Ask about a missing worker choice here; announce and use it at dispatch. Start no workers in Plan mode, and never use a headless process to bypass it.
+Check the host's mode first. In Plan mode the invocation names who implements after approval, not how the plan is made. Research and design yourself, prepare pieces and briefs, and keep the plan, worker choice, checks, and pending dispatch in the conversation or an allowed plan artifact. Record in the plan that oversee implements it with that worker, so fresh-context implementation keeps it. Ask about a missing worker choice here; announce it at dispatch. Start no workers in Plan mode and never bypass it with a headless process.
 
-When ready, use the host's native plan approval/execution transition if available. Otherwise state the mode change the user must make. A skill invocation or an approval sentence does not itself override host restrictions. Once the host enables execution, continue the prepared run without requiring another invocation or dispatching a piece twice. If approval is denied or the plan changes, revise the handoff before dispatch.
+When ready, use the host's native approval transition, or state the mode change the user must make. An invocation or approval sentence does not override host restrictions. Once execution is enabled, continue the prepared run without another invocation or duplicate dispatch. If approval is denied or the plan changes, revise the handoff first.
 
 ## 3. Choose workers
 
-Read the relevant section of [the harness reference](references/harnesses.md) before first dispatch. Use the tools and schemas actually available in this session.
+Before dispatch, open only this host's reference: [Claude Code](references/claude-code.md), [Codex](references/codex.md), [OpenCode](references/opencode.md), [Cursor](references/cursor.md), [GitHub Copilot](references/copilot.md), [Antigravity](references/antigravity.md), [Cline](references/cline.md), or [Kiro CLI](references/kiro.md). Do not identify the host from one tool name. On an unlisted host, open none and use the live tool schema, which always takes precedence.
 
-1. **User choice:** resolve the named model and effort against the current harness catalog, preserving version and variant. Match display names or shorthand only when unambiguous. Examples are not defaults or an allowlist. Do not substitute, discard an unsupported effort, or escalate without the user's agreement.
-2. **Missing choice:** ask once before dispatch, suggesting an available worker suited to the task. Retain a choice already given for this work in the conversation or plan. If only model or effort is named, choose the missing setting by difficulty from supported settings.
-3. **No answer or noninteractive:** choose an available, tool-capable worker suited to the task, favoring a cheaper model for clear implementation. Use a low supported effort for mechanical work, medium for several files with a clear spec, and high for tricky implementation. Settle ambiguous design yourself first. These are relative levels, not a promise every model has them. If availability cannot be established, report the blocker.
-4. **Before dispatch:** announce model and effort once in one line, and whether named or chosen by difficulty. If the user later authorizes a changed choice, announce it before using it.
+1. **User choice:** resolve the named model and effort against the current catalog, preserving version and variant (IDs may be case-sensitive). Match names or shorthand only when unambiguous; prefer the session's provider only for the same model. Examples are not defaults or an allowlist. Without the user's agreement, do not substitute, drop an unsupported effort, or escalate; an unsupported `max` is not the highest available level.
+2. **Missing choice:** ask once before dispatch, suggesting a suitable available worker; keep any choice already given for this work. If only model or effort is named, choose the other by difficulty from supported settings.
+3. **No answer or noninteractive:** choose an available, tool-capable worker, favoring a cheaper model for clear implementation. Effort: low for mechanical work, medium for several files with a clear spec, high for tricky implementation, relative to the levels the model supports. Settle ambiguous design yourself first. If availability cannot be established, report the blocker.
+4. **Before dispatch:** announce model and effort in one line, saying whether named or chosen by difficulty. Announce a later authorized change before using it.
 
-An unavailable named model or effort is a choice to resolve, not a failed implementation to retry. In noninteractive runs, report it as blocked without model calls. If the host cannot control a requested setting, explain that limitation and obtain agreement to its default before dispatch.
+An unavailable named model or effort is a choice to resolve, not a failed implementation to retry; in noninteractive runs, report it blocked without model calls. If the host cannot control a requested setting, explain that and get agreement to its default before dispatch. Never claim an unverified model or effort was honored, or change global configuration to enable dispatch.
 
 ## 4. Plan and baseline
 
-- Inspect the project and plan yourself. Workers never research for the plan.
-- Define done as required behavior plus the project's real test/build/check commands. Find commands in project documentation or CI; do not invent them. If no test, build, or meaningful diff can verify the work, resolve verification before dispatch.
-- Split into a few useful pieces with exclusive file ownership. Shared-file edits and dependent pieces run in successive batches. Account for available concurrency; queue excess pieces without probing running workers.
-- Before any worker starts, capture staged and unstaged diffs, the tracked/untracked path list, and original contents or hashes needed to compare changes against the starting workspace. Keep snapshots outside deliverables. With no Git repository, use an equivalent file snapshot. Do not reset, stash, stage, or discard user edits.
-- Give workers the relevant existing edits and require their preservation. Refresh the comparison point after accepted batches while retaining the original baseline for final audit.
+- Inspect the project and plan yourself; workers never research. Run independent read-only commands as separate calls in one turn, never chained.
+- Define done as required behavior plus the project's real check commands from its documentation or CI, never invented. If nothing can verify the work, resolve verification before dispatch.
+- Split into a few useful pieces with exclusive file ownership. Shared-file edits and dependent pieces go in later batches. Queue pieces beyond concurrency limits without probing workers.
+- Before any worker starts, record a compact baseline: commit id and `git status --short --branch --ignored=matching -uall`. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list (empty output: use the commit id; if it fails, hash the dirty files). Hash untracked files with `git hash-object`. With no commit yet, hash the files the same way; with no Git, use any file hash. Never write snapshot files or print full diffs or whole files to build it. Never reset, stash, stage, or discard user edits.
+- Refresh the comparison point after accepted batches; keep the original baseline for the final audit.
 
 ## 5. Brief each worker
 
-Use fresh context when the harness supports it. Never rely on inherited conversation history. Send a self-contained brief:
+Use fresh context where supported. Keep scope, constraints, and checks inline so the brief, and any fresh retry, stands alone:
 
 - Goal and reason; files it may edit and must not touch.
-- User requirements, plan decisions, existing edits, APIs to preserve, dependency/style constraints, and permission boundaries.
-- Exact definition-of-done commands and expected behavior; dependencies already accepted.
-- Report under 15 lines: changed paths, checks/results, unfinished work, and uncertainty.
-- No commits, pushes, changes outside scope, permission weakening, or further delegation unless explicitly authorized.
-- Keep scratch files inside assigned scope and clean them before reporting. Test-framework temporary data must clean itself up.
+- Where to start: paths and symbols, not line numbers. Cite a readable plan section by path.
+- User requirements, plan decisions, existing edits and APIs to preserve, dependency/style constraints, permission boundaries.
+- Piece-scoped checks, with the rule "Run each check exactly as written; never chain or append commands such as `; echo`"; expected behavior and accepted dependencies; not the project-wide integration check, since parallel workers share the tree.
+- Stop and report rather than widen scope. No commits, pushes, permission weakening, or further delegation unless explicitly authorized.
+- Keep scratch files and test data in scope; remove them before reporting.
+- "Your final message is the report", under 15 lines: `Changed` (paths), `Checks` (command and pass/fail, no logs), `Unfinished`, `Uncertain`.
 
-Describe outcomes, leaving implementation choices to the worker unless a step is a real constraint.
+Describe outcomes, not steps, unless a step is a real constraint.
 
 ## 6. Dispatch and wait
 
-Launch the independent batch together using native subagents with the resolved model/effort. Confirm the launch mechanism honors those settings and the required permission boundaries. Prefer completion notifications or blocking waits. Do not poll status, request progress, or read partial transcripts. A wait timeout is not worker failure; wait again if necessary without a status probe.
+Launch the independent batch together through native subagents that honor the resolved model/effort and permission boundaries. Prefer one blocking wait for the current batch. Where completion notices arrive one at a time, end each turn with no text and start no audit until the batch is in. Never emulate a wait with sleep, timers, or status calls; request no progress and read no partial transcripts. A wait timeout is not worker failure; wait again. In a noninteractive run, do not end the turn with workers outstanding unless the host resumes you on completion.
 
-Do not implement the workers' pieces yourself while waiting. Handle genuine clarification or permission requests when surfaced; send only the needed answer. A brief blocker notice is allowed, not routine progress chatter. Preserve approval boundaries instead of bypassing a blocked native call through another mechanism.
+Do not implement workers' pieces while waiting. Answer genuine clarification or permission requests minimally. Never route around a blocked native call.
 
-Honor explicit user/harness deadlines; invent no default time limit and do not infer a hang from silence. On cancellation, stop new dispatch, request cancellation of active workers through supported controls, and report any work still running. Do not retry cancellation, permission denials, or unavailable settings automatically.
+Honor explicit deadlines; invent none and do not infer a hang from silence. On cancellation, stop dispatch, cancel active workers through supported controls, and report work still running. Do not retry cancellation, permission denials, or unavailable settings automatically.
 
-If native workers are unavailable, use a headless fallback only when it preserves mode, permissions, model choice, and completion handling. Otherwise report the limitation and offer sequential work in this session. Never pretend a dispatch succeeded.
+If native workers are unavailable, use a [headless fallback](references/headless.md) only when it preserves mode, permissions, model choice, and completion handling; otherwise report the limitation and offer sequential work here. Never pretend a dispatch succeeded.
 
 ## 7. Audit and retry
 
-Audit here means checking a finished batch against its briefs. It is your work, never a worker's. Audit the whole batch before dependent dispatch:
+Audit is your work, never a worker's. Check each finished batch against its briefs before dispatching the next:
 
-1. Read each short report and compare actual files to the baseline. Include staged changes, untracked/new files, deletions, and edits outside assigned scope; `git diff --stat` alone is insufficient. Reported scope violations or leftover scratch files fail acceptance; do not declare everything complete while noting them as harmless.
-2. Inspect the changed code needed to assess behavior and preservation of user edits. Do not accept a report as proof or read worker transcripts for routine auditing.
-3. Run the piece's acceptance checks yourself. Accept it or record a specific failure.
-4. Run the project's integration check after pieces pass. Attribute integration failures to responsible pieces before retrying them; do not declare success on individual tests alone.
+1. Read each report, then list changed paths for the whole workspace against the baseline: staged, unstaged, untracked, ignored, and deleted, including out-of-scope edits; never narrow it to a piece's files. Scope violations, unauthorized commits (HEAD or branch moved), or leftover scratch files (not caches or build output from checks) fail acceptance, never "harmless" notes.
+2. Read real diffs with `git diff <baseline id>` (the commit id, or the stash-create id on a dirty tree); plain `git diff` misses staged and committed edits, and `--stat` alone is insufficient. Read new untracked files whole, other whole files only where a diff cannot show behavior. Confirm user edits survived. Reports are not proof; do not read worker transcripts routinely.
+3. Run each piece's acceptance checks yourself with the runner's quiet option, one check per command, no pipes or redirection, since a pipe's exit code hides a failing check. Accept the piece or record a specific failure.
+4. Run the project's integration check after pieces pass; attribute failures to responsible pieces before retrying. Individual tests alone are not success.
 
-Retry only failed pieces, at most twice after the initial attempt. Resume the original worker if supported, sending the failure and required fix. A fresh worker receives the complete brief, including constraints, checks, baseline, and failure evidence. Keep the chosen model and effort unless the user authorizes a change.
+Retry only failed pieces, at most twice after the initial attempt. Resume the original worker if supported, sending the failing lines (not the log) and the required fix. A fresh worker receives the complete brief plus that failure evidence. Keep the chosen model and effort unless the user authorizes a change.
 
-After the second failed retry, stop dispatch, settle or cancel remaining workers through supported controls, and report completed work, unfinished work, and blockers. Preserve partial changes for review; do not discard them automatically.
+After the second failed retry, stop dispatch, settle or cancel remaining workers, and report what finished, what did not, and blockers. Keep partial changes for review.
 
 ## 8. Report
 
-Return only the result: what changed, checks and outcomes, and anything unfinished or blocked. No plan, worker logs, or audit notes unless requested. Normal runs have only the pre-dispatch worker notice; necessary handoff, clarification, blocker, and cancellation messages are exceptions.
+Return only the result: what changed, checks and outcomes, and anything unfinished or blocked. No plan, worker logs, or audit notes unless requested.
 
-The report ends the run. What the user asks next is an ordinary request under "When this skill applies", not more work for these workers.
+The report ends the run. The next request is ordinary (see "When this skill applies"), not work for these workers.

@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 
-from .run import ROOT, Blocked, correctness, snapshot, write_json
+from .run import ROOT, Blocked, correctness, fill_prompt, init_repo, snapshot, write_json
 
 
 def resolve(models, name, effort):
@@ -150,11 +150,9 @@ def stage(output, case):
     shutil.copytree(ROOT / "evals/fixtures" / case["fixture"], project)
     skill = project / ".agents/skills/oversee"
     skill.mkdir(parents=True)
-    shutil.copyfile(ROOT / "skills/oversee/SKILL.md", skill / "SKILL.md")
-    shutil.copytree(ROOT / "skills/oversee/references", skill / "references")
+    shutil.copytree(ROOT / "skills/oversee", skill, dirs_exist_ok=True)
     (project / ".gitignore").write_text("__pycache__/\n*.pyc\n.notes.json\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(project)], check=True, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=project, check=True, capture_output=True)
+    init_repo(project)
     return project, skill / "SKILL.md"
 
 
@@ -205,7 +203,7 @@ def run_case(executable, case, output, manager, worker):
         root = created["thread"]["id"]
         write_json(output / "session.json", {"root": root, "manager": manager, "worker": worker,
                                                "created": created})
-        prompt = case["prompt"].replace("{worker}", f"{worker['model']} {worker['effort']}")
+        prompt = fill_prompt(case["prompt"], f"{worker['model']} {worker['effort']}")
         prompt = prompt.replace("/oversee", "$oversee")
         prompt += "\nWork only inside this fixture. No commits, pushes, installs, global changes, external services, or other projects."
         write_json(output / "prompt.json", {"text": prompt})
