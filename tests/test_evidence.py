@@ -7,7 +7,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from evals.evidence import final_text, grade, plan_phase_checks, skill_loaded, tools, total_usage
+from evals.evidence import (final_text, grade, inspects_diff, plan_phase_checks, skill_loaded, tools,
+                            total_usage, usage_by_role)
 from evals.review import review
 from evals.run import Blocked, OpenCode, main, provider_blocker, resolve, retain_interrupted, run_case, snapshot
 
@@ -68,6 +69,58 @@ class EvidenceTests(unittest.TestCase):
         self.assertIsNone(usage["input"])
         self.assertIsNone(usage["cost_usd"])
         self.assertIsNone(total_usage([])["output"])
+
+    def test_usage_by_role_splits_root_from_children(self):
+        root, child = transcript(), transcript("child", "root")
+        root["messages"].append({"type": "assistant", "content": []})
+        root["messages"].append({"type": "assistant", "tokens": {"input": 1}})
+        split = usage_by_role([root, child, copy.deepcopy(root)])
+        self.assertEqual(split["manager"]["sessions"], 1)
+        self.assertEqual(split["manager"]["input"], 5)
+        self.assertEqual(split["children"]["sessions"], 1)
+        self.assertEqual(split["children"]["cache_read"], 2)
+        self.assertEqual(split["manager_turns"], 2)
+        self.assertEqual(set(split["manager"]), set(total_usage([root])))
+
+    def test_usage_by_role_without_children_or_measurements(self):
+        split = usage_by_role([transcript()])
+        self.assertEqual(split["children"]["sessions"], 0)
+        self.assertEqual(split["children"]["input"], 0)
+        self.assertEqual(split["children"]["cost_usd"], 0)
+        root, child = transcript(), transcript("child", "root")
+        root["messages"] = [{"type": "assistant", "content": []}]
+        del child["info"]["tokens"]
+        split = usage_by_role([root, child])
+        self.assertIsNone(split["manager"]["input"])
+        self.assertIsNone(split["children"]["input"])
+        self.assertIsNone(split["manager_turns"])
+
+    def test_chained_inspection_commands_count_as_diff(self):
+        self.assertTrue(inspects_diff("git status --short && git diff"))
+        self.assertTrue(inspects_diff("git status --short; git diff -- notes.py"))
+        self.assertTrue(inspects_diff("git status --short\ngit diff"))
+        self.assertFalse(inspects_diff("git status --short && git diff --stat"))
+        self.assertFalse(inspects_diff("echo git diff"))
+        root, child = transcript(), transcript("child", "root", created=2, idle=4)
+        root["messages"][0]["content"] = [{"type": "tool", "name": "shell", "time": {"created": 5}, "state": {
+            "status": "completed", "input": {"command": "git status --short && git diff"}, "metadata": {"exit": 0}}}]
+        self.assertTrue(grade([root, child], "parallel", True, WORKER)["checks"]["manager_inspects_changes"])
+        root["messages"][0]["content"][0]["state"]["input"]["command"] = "git diff --stat"
+        self.assertFalse(grade([root, child], "parallel", True, WORKER)["checks"]["manager_inspects_changes"])
+
+    def test_dependent_acceptance_accepts_chained_diff(self):
+        root = transcript()
+        first = transcript("first", "root", created=1, idle=2)
+        second = transcript("second", "root", created=3, idle=4)
+        root["messages"][0]["content"] = [
+            {"type": "tool", "name": "shell", "time": {"created": 2.2, "ran": 2.3, "completed": 2.4}, "state": {
+                "status": "completed", "input": {"command": "python -m unittest tests.test_first"},
+                "metadata": {"exit": 0}}},
+            {"type": "tool", "name": "shell", "time": {"created": 2.5, "ran": 2.6, "completed": 2.7}, "state": {
+                "status": "completed", "input": {"command": "git status --short && git diff"}, "metadata": {"exit": 0}}}]
+        phase = {"unchanged": True, "no_implementation_workers": True}
+        checks = grade([root, first, second], "plan-handoff", True, WORKER, phase)["checks"]
+        self.assertTrue(checks["dependent_manager_acceptance_between_workers"])
 
     def test_authentication_defaults_are_not_measured_zero_usage(self):
         root = transcript()

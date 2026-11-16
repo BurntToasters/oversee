@@ -507,6 +507,66 @@
         "With no worker named, the earlier run's choice may be reused and is announced in one line before dispatch",
         "Workers only implement fixes; the manager audits and runs checks"
       ]
+    },
+    {
+      "id": 45,
+      "name": "ready-plan-not-reexplored",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "A ready plan in this conversation names the files to change in the notes CLI, the decisions, and `python -m unittest` as the acceptance check. The user writes: /oversee {worker} implement the plan.",
+      "expectations": [
+        "The manager reuses the plan's scope, decisions, and checks; it reads only what splitting pieces and naming checks need",
+        "No re-exploration of areas the plan already settles and no replacement design",
+        "Independent read-only commands are issued together in one turn"
+      ]
+    },
+    {
+      "id": 46,
+      "name": "lean-baseline",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "The notes CLI repository has an unstaged edit to the README and one untracked scratch file of the user's. The user writes: /oversee {worker} add a --json flag to list, with unit tests.",
+      "expectations": [
+        "The baseline records the changed and untracked paths with hashes; no full diff or whole file is printed to build it",
+        "No snapshot file is written inside the workspace, and any snapshot written elsewhere is removed before the final report",
+        "The user's README edit and untracked file are preserved; nothing is reset, stashed, staged, or discarded"
+      ]
+    },
+    {
+      "id": 47,
+      "name": "brief-pointers-and-report-fields",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a delete_note function to store.py and a --json flag to the list command in notes.py, each with unit tests.",
+      "expectations": [
+        "Each brief names start pointers as paths and symbols rather than pasting file contents or citing line numbers",
+        "Scope, constraints, and piece-scoped checks are inline in each brief; no worker is asked to run the whole-project integration check",
+        "Each worker's final message reports Changed, Checks (command and pass/fail, no logs), Unfinished, and Uncertain in under 15 lines"
+      ]
+    },
+    {
+      "id": 48,
+      "name": "quiet-checks-real-exit-code",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a delete command to the notes CLI, with unit tests.",
+      "expectations": [
+        "The manager runs acceptance checks with the test runner's own quiet option, one check per command",
+        "No check is piped or redirected, so the recorded exit code is the check's own",
+        "Read-only inspection commands may be batched; checks are never combined into one command"
+      ]
+    },
+    {
+      "id": 49,
+      "name": "staggered-completion-silence",
+      "fixture": "notes-cli",
+      "execution": "scenario",
+      "prompt": "/oversee {worker} add a --tag filter to list and a tag command to the notes CLI, as two independent pieces. The host delivers each worker's completion notice in a separate turn.",
+      "expectations": [
+        "After the first completion notice the manager ends its turn with no text and starts no audit",
+        "The audit starts only once the whole batch is in; no sleep, timer, or status call emulates a wait",
+        "Between the worker-choice line and the final report, manager turns contain tool calls only"
+      ]
     }
   ]
 }

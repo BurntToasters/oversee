@@ -2,9 +2,9 @@
 
 <!-- [![skills.sh](https://skills.sh/b/BurntToasters/oversee)](https://skills.sh/BurntToasters/oversee) -->
 
-Version: `1.1.1`.
+Version: `1.2.0`.
 
-Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode), and local/internet installation on macOS and WSL. The procedures and current gaps are in [evals/README.md](evals/README.md).
+Release status: preview. Current smoke evidence is limited to OpenCode v2 service-API prompt runs and Codex app-server runs on Windows. Before removing the preview label, run and retain passing evidence for controlled retries, dirty-workspace preservation, cancellation, denied Plan handoff, result-only reporting, and the live workflow on each primary host (Claude Code, Codex, Cursor, OpenCode). The procedures and current gaps are in [evals/README.md](evals/README.md).
 
 An [Agent Skill](https://agentskills.io) for a manager model to oversee worker subagents without micromanaging them. You choose any model and effort supported by your current harness; names in examples are not defaults or an allowlist.
 
@@ -14,11 +14,12 @@ The manager plans the work, dispatches independent pieces within available concu
 
 - A supported skills host with subagents or a headless fallback that preserves permissions
 - Node.js 22.20 or later for `npx skills add`
-- For the deprecated scripts: Bash, `curl`, and `tar` (`install.sh`), or PowerShell with `tar` or a zip fallback (Windows)
 
 ## Compatibility
 
-The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md` plus `references/`. The following are the discovery locations the deprecated scripts write to; `npx skills add` keeps one copy in `~/.agents/skills/oversee` and links or copies it into the folders of the agents it detects. Model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
+The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md` plus `references/`. `npx skills add` keeps one copy in `~/.agents/skills/oversee` and links or copies it into the folders of the agents it detects. Model selection, permissions, and mode transitions depend on the host/version. References distinguish documentation checks from live verification.
+
+Where each host reads the skill (global folders; several hosts read more than one, see [Host notes](#host-notes)):
 
 | Agent | Skill folder |
 |---|---|
@@ -29,13 +30,13 @@ The portable payload is [`skills/oversee/`](skills/oversee/): `SKILL.md` plus `r
 | Antigravity CLI (additional path) | `~/.gemini/antigravity-cli/skills/oversee` |
 | Kiro CLI 2.x and V3 | `~/.kiro/skills/oversee` |
 
-Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Cline, Antigravity, and Kiro CLI are supported on a best-effort basis: the installers still place the skill where they read it, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`) for native subagents; exact model and effort require its headless CLI. Kiro CLI 2.x and V3 share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
+Primary hosts are Claude Code, Codex, Cursor, and OpenCode. GitHub Copilot, Cline, Antigravity, and Kiro CLI are supported on a best-effort basis: the skills CLI places the skill where they read it, and their harness notes are kept, but they are lower priority, live checks on them are optional, and they do not block releases. Antigravity can only pick worker tiers (`inherit`, `flash`, `pro`) for native subagents; exact model and effort require its headless CLI. Kiro CLI 2.x and V3 share the global skills directory; V2 exposes skills as slash commands from 2.1, and V3 supports them natively.
 
 Many other hosts read the same `~/.agents/skills/oversee` path and are covered by that entry, including Warp, Zed, Amp, Goose, Pi, OpenHands, Augment, Crush, Junie, Qwen Code, Factory Droid, Roo Code, Windsurf, Kilo Code, Gemini CLI, and Devin CLI.
 
-Harness-specific subagent tools, model names, and effort flags live in [`references/harnesses.md`](skills/oversee/references/harnesses.md).
+Harness-specific subagent tools, model names, and effort flags live in [`skills/oversee/references/`](skills/oversee/references/), one file per host; a run opens only its host's file.
 
-Invocation syntax depends on the host version. Current OpenCode v2 docs describe loading a skill with `@oversee` or its native skill tool, while TUI slash commands are configured separately. The live smoke sent `/oversee` as prompt text through the local service API and attached the skill explicitly; this does not prove the TUI parser exposes that command. See the versioned notes in the harness reference.
+Invocation syntax depends on the host version. Current OpenCode v2 docs describe loading a skill with `@oversee` or its native skill tool, while TUI slash commands are configured separately. The live smoke sent `/oversee` as prompt text through the local service API and attached the skill explicitly; this does not prove the TUI parser exposes that command. See the versioned notes in [`references/opencode.md`](skills/oversee/references/opencode.md).
 
 ## Install
 
@@ -57,69 +58,40 @@ npx skills remove oversee -g                                         # uninstall
 
 It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI custom agents must list skills in their `resources` (`skill://.kiro/skills/**/SKILL.md`); the default agent needs nothing. The CLI sends anonymous install telemetry unless `DISABLE_TELEMETRY=1` is set. Review any skill before use; it runs with your agent's permissions.
 
-Switching from the scripts: run the script uninstaller first (see Uninstall), then `npx skills add`. Otherwise `npx skills add` replaces the script-installed folders of the agents it targets with links, deleting any extra files you kept there, and leaves the other script copies (for example `~/.cline/skills/oversee` and `~/.gemini/config/skills/oversee`) behind, where `npx skills update` and `remove` never touch them.
+### Migrating from the old install scripts
 
-## Install (Deprecated - Will be removed in 1.2.0)
+The bundled install scripts were removed in 1.2.0. The skills CLI's global paths are Claude Code `~/.claude/skills`, Codex and Cline `~/.agents/skills`, Cursor `~/.cursor/skills`, OpenCode `~/.config/opencode/skills`, Copilot `~/.copilot/skills`, Antigravity `~/.gemini/config/skills`, and Kiro CLI `~/.kiro/skills`. `npx skills remove oversee -g` deletes a named skill folder from the agent folders it targets even if another installer put it there, but it does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. If you installed with the scripts, remove all six of their folders by hand, then install with the skills CLI.
 
-The bundled scripts still work for machines without Node. They write the same payload to the six folders listed under Compatibility. Running them after an `npx skills` install is safe: `install.sh` skips the symlinked folders and updates the canonical copy.
-
-### Unix (macOS, Linux, WSL, Git Bash)
-
-One-liner, straight from GitHub:
+Bash (macOS, Linux, WSL, Git Bash):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BurntToasters/oversee/main/install.sh | bash
+rm -rf ~/.agents/skills/oversee ~/.claude/skills/oversee ~/.cline/skills/oversee \
+  ~/.gemini/config/skills/oversee ~/.gemini/antigravity-cli/skills/oversee ~/.kiro/skills/oversee
+npx skills add BurntToasters/oversee -g
 ```
 
-Or from a clone of this repo:
-
-```bash
-git clone https://github.com/BurntToasters/oversee.git
-cd oversee
-bash ./install.sh
-```
-
-Re-run to update. The scripts stage the complete payload, replace `SKILL.md` and the entire `references/` subtree, and restore the previous managed payload if replacement fails. Deleted upstream references disappear. Other files at the skill root and neighboring skills are preserved during updates. Recovery failures report the retained backup path. Each destination is a separate transaction; an earlier destination can succeed before a later one fails.
-
-### Windows
-
-From a clone, in cmd:
-
-```bat
-install.bat
-```
-
-Or straight from GitHub, in PowerShell:
+PowerShell (Windows):
 
 ```powershell
-irm https://raw.githubusercontent.com/BurntToasters/oversee/main/remote-install.ps1 | iex
+'.agents\skills', '.claude\skills', '.cline\skills', '.gemini\config\skills', '.gemini\antigravity-cli\skills', '.kiro\skills' |
+  ForEach-Object { Join-Path $env:USERPROFILE "$_\oversee" } |
+  Where-Object { Test-Path $_ } |
+  ForEach-Object { Remove-Item -Recurse -Force $_ }
+npx skills add BurntToasters/oversee -g
 ```
 
-These one-liners execute downloaded code. Inspect the script before running it if you need to review what executes. The remote installers download and validate the payload in a temporary folder before updating installed copies; download/extraction failures stop installation and clean that folder.
+These commands delete only folders named `oversee`; other skills are untouched.
 
 ## Uninstall
 
-After an `npx skills` install, run `npx skills remove oversee -g`. For the deprecated scripts:
+Run `npx skills remove oversee -g`. If copies from the old scripts remain, remove them with the commands above.
 
-### Unix
+## Host notes
 
-```bash
-bash ./uninstall.sh
-```
-
-Or, without a clone:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/BurntToasters/oversee/main/uninstall.sh | bash
-```
-
-### Windows
-
-```bat
-uninstall.bat
-```
-
-Uninstall deletes only the `oversee` folder, or symlink, from the six locations above. Your other skills are untouched.
+- **Invocation controls.** The payload carries a behavioral guard. Host-enforced controls are optional and not installed: in Claude Code, set `skillOverrides.oversee` to `user-invocable-only` in your settings (the `disable-model-invocation: true` frontmatter key also works there, but the claude.ai packager rejects it, so the payload omits it); in Codex, an `agents/openai.yaml` sidecar with `policy.allow_implicit_invocation: false`. OpenCode v2 honors the shipped `metadata.opencode/autoinvoke: "false"`, which hides the skill from the model's list while `@oversee` still loads it.
+- **Duplicate discovery.** OpenCode v2 and Cursor read both `~/.agents/skills` and `~/.claude/skills` (OpenCode also `~/.config/opencode/skills`; Cursor also `~/.cursor/skills` and `~/.codex/skills`), so one skill can be discovered twice. In OpenCode the later-registered copy wins.
+- **Codex.** Skills are read from `.agents/skills` in each folder from the working directory up to the repository root, `~/.agents/skills`, and `/etc/codex/skills`; Codex follows symlinked skill folders. The skills listing is capped by `skills.max_context_tokens`.
+- **Kiro CLI.** `KIRO_HOME` overrides the global `~/.kiro` folder; if you set it, check that the skill landed in that profile's `skills` folder and copy it there otherwise. The default agent finds skills automatically. A custom agent loads them only when its `resources` include `skill://` URIs (for example `skill://.kiro/skills/**/SKILL.md`), unless default resource inheritance is on. Workspace skills override same-name global skills.
 
 ## Usage
 
@@ -152,7 +124,7 @@ Workers only implement. They never audit, review, map, or research a repository;
 
 A run ends with its report. Later requests in the same conversation, such as another codebase audit, are ordinary requests; they do not restart the workflow or reuse the earlier worker model. Invoke `/oversee` again to hand new work to workers.
 
-Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard; optional host-enforced invocation controls are documented in the harness reference and are not installed automatically.
+Activation is explicit: ordinary requests, reviews of the skill, and quoted commands do not start the workflow. The portable payload includes a behavioral guard; optional host-enforced invocation controls are listed under [Host notes](#host-notes) and are not installed automatically.
 
 ## How it works
 
@@ -165,13 +137,40 @@ Activation is explicit: ordinary requests, reviews of the skill, and quoted comm
 
 User/harness deadlines and cancellation stop further dispatch and request cancellation of active workers. There is no default time limit. Wait transport timeouts alone do not mean a worker failed. Permission denials and unavailable models are blockers, not reasons to spend implementation retries.
 
+## Keeping runs cheap
+
+Oversee has not been shown to save tokens or money. The only measurement so far, the Go pilot in [evals/README.md](evals/README.md), cost more with oversee than a direct run, and the 1.2.0 changes are unmeasured. These points follow from how hosts resend and cache context:
+
+- **The manager's context is the main recurring cost.** It is re-sent on every manager turn. In 1.2.0 the manager opens one host reference file instead of notes for all nine, and reads and prints only what its decisions need.
+- **Each worker completion is a manager turn, and caches expire.** Claude Code keeps the main conversation's prompt cache for 1 hour on a subscription and 5 minutes with an API key or usage credits, and a subagent's for 5 minutes (`promptCacheTtl`, `CLAUDE_CODE_PROMPT_CACHE_TTL`). A worker that outlasts the cache means the manager's whole context is written again at the cache-write price.
+- **Each model has its own cache.** Switching model mid-session re-reads the whole history uncached. After a large planning session, save the plan to a file and start implementation in a fresh session that invokes oversee on that file (OpenCode: `@PLAN.md`; Claude Code: the `showClearContextOnPlanAccept` setting adds a clear-context option when you approve a plan).
+- **One small change is cheaper done directly.** Each piece has fixed overhead: a brief, a worker start, and an audit.
+
+### OpenCode v2 configuration sketch
+
+Checked 2026-11-16 against the v2.3.0 docs source; verify against your installed version.
+
+- The top-level key is `agents` (v1 used `agent`).
+- Effort is a variant on the model string, `provider/model#variant`. An unknown variant is an error.
+- `agents.general.model` sets the default worker.
+- Fable 5.2 is a Zen model (`opencode/claude-fable-5-2`), not an OpenCode Go model. Go usage limits are per model.
+- `/compact` sends the full conversation, so it can reuse the cache. Pinning `agents.compaction.model` to a different model gives that up.
+- Cache warming exists but is off by default (`"warming": true`), and it never warms subagent sessions.
+
+```jsonc
+{ "$schema": "https://opencode.ai/config.json",
+  "agents": {
+    "build":   { "model": "anthropic/claude-opus-5-5#medium" },
+    "general": { "model": "opencode-go/deepseek-v4.1-flash" } } }
+```
+
 ## Development
 
 - The payload is `skills/oversee/`; keep everything else at the repository root, because the skills CLI copies the whole skill folder.
 - `version.txt` is the skill's version source. Run `python bump-ver.py patch`, `minor`, `major`, or an exact version such as `0.2.0-rc.1`. The script synchronizes `version.txt`, skill metadata, and the README version line; it preserves line endings and leaves model/harness versions and historical evidence unchanged. Add new current-version declarations to `TARGETS` in the script.
 - Run `python bump-ver.py --check` before a release. Use `python bump-ver.py patch --dry-run` to preview. The script stops on version drift or missing declarations before changing files. Version tooling is development-only and is not installed with the skill.
 - Eval scenarios live in [`evals/evals.json`](evals/evals.json). The catalog includes manual/fault-injection scenarios as well as the three automated pilot cases; adding a scenario is not evidence it passed.
-- Run offline regression checks with `python -B -m unittest discover -s tests -v`. Installer checks use throwaway profiles; Bash and Windows-specific checks skip when their platform is unavailable. No dependencies beyond Python's standard library are needed for these tests.
+- Run offline regression checks with `python -B -m unittest discover -s tests -v`. `tests/test_payload.py` checks the payload layout, frontmatter, byte budgets, and reference links. No dependencies beyond Python's standard library are needed for these tests.
 - Run the paired pilot with [`evals/run.py`](evals/run.py); procedure and evidence limits are in [`evals/README.md`](evals/README.md).
 - Focused reruns can select cases and one arm; they are marked unpaired. Regrading rejects retained projects that differ from their recorded final hashes.
 - Repo conventions and remaining verification gaps are in [`AGENTS.md`](AGENTS.md).

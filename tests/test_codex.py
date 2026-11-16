@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from evals.codex_run import Codex, export, resolve, run_case
-from evals.codex_review import grade, usage
+from evals.codex_review import grade, usage, usage_by_role
 from evals.run import Blocked
 
 
@@ -75,6 +75,31 @@ class CodexTests(unittest.TestCase):
         self.assertIsNone(result["reasoning"])
         self.assertIsNone(result["cost_usd"])
         self.assertIsNone(usage([event("root", 3)], records)["input"])
+
+    def test_usage_by_role_splits_root_thread_without_changing_usage(self):
+        def event(thread, tokens):
+            return {"direction": "received", "message": {"method": "thread/tokenUsage/updated", "params": {
+                "threadId": thread, "tokenUsage": {"total": {"inputTokens": tokens, "outputTokens": 2}}}}}
+        records = [{"thread": {"id": "root"}}, {"thread": {"id": "child"}}, {"thread": {"id": "root"}}]
+        events = [event("root", 1), event("root", 3), event("child", 5)]
+        split = usage_by_role(events, records, "root")
+        self.assertEqual(split["manager"]["input"], 3)
+        self.assertEqual(split["manager"]["sessions"], 1)
+        self.assertEqual(split["children"]["input"], 5)
+        self.assertEqual(split["children"]["sessions"], 1)
+        self.assertIsNone(split["manager"]["reasoning"])
+        self.assertIsNone(split["manager_turns"])
+        self.assertEqual(set(split["manager"]), set(usage(events, records)))
+        self.assertEqual(usage(events, records)["input"], 8)
+        alone = usage_by_role([event("root", 3)], [{"thread": {"id": "root"}}], "root")
+        self.assertEqual(alone["children"]["sessions"], 0)
+        self.assertEqual(alone["children"]["input"], 0)
+
+    def test_chained_status_and_diff_counts_as_inspection(self):
+        records, meta = orchestration_records()
+        events = parallel_events(left_code=0)
+        events[7] = item_event(7, audit_item("git status --short && git diff", 0, "diff --git a/left.py b/left.py"))
+        self.assertTrue(grade(events, records, meta, "parallel")["checks"]["manager_inspects_changes"])
 
     def test_configured_thread_model_cannot_replace_execution_context_proof(self):
         settings = {"model": "arbitrary-model", "effort": "max"}

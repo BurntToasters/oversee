@@ -61,5 +61,14 @@ class CatalogTests(unittest.TestCase):
             self.assertIn(name, names)
 
 
+    def test_context_economy_cases_present(self):
+        by_id = {e["id"]: e for e in EVALS}
+        for number, name in [(45, "ready-plan-not-reexplored"), (46, "lean-baseline"),
+                             (47, "brief-pointers-and-report-fields"), (48, "quiet-checks-real-exit-code"),
+                             (49, "staggered-completion-silence")]:
+            self.assertEqual(by_id[number]["name"], name)
+            self.assertEqual(by_id[number]["execution"], "scenario", name)
+            self.assertEqual(by_id[number]["fixture"], "notes-cli", name)
+
 if __name__ == "__main__":
     unittest.main()

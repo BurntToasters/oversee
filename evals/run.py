@@ -17,9 +17,9 @@ import urllib.parse
 import urllib.request
 
 if __package__:
-    from .evidence import final_text, grade, plan_phase_checks, total_usage
+    from .evidence import final_text, grade, plan_phase_checks, total_usage, usage_by_role
 else:
-    from evidence import final_text, grade, plan_phase_checks, total_usage
+    from evidence import final_text, grade, plan_phase_checks, total_usage, usage_by_role
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -315,7 +315,8 @@ def run_case(api, case, output, with_skill, manager, worker, deadline_seconds=No
         proof["project_unchanged"] = before == after
     report = {"case": case["name"], "with_skill": with_skill,
               "correctness": proof, "orchestration": grade(raw, case["name"], with_skill, worker, phase),
-              "elapsed_seconds": time.monotonic() - started, "usage": total_usage(raw)}
+              "elapsed_seconds": time.monotonic() - started, "usage": total_usage(raw),
+              "usage_by_role": usage_by_role(raw)}
     report["orchestration"]["checks"]["exact_manager_settings"] = any(
         m.get("type") == "assistant" for m in raw[0]["messages"]) and all(
         m.get("model") == manager for m in raw[0]["messages"] if m.get("type") == "assistant")
