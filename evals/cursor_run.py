@@ -64,8 +64,9 @@ def grade(events, case, worker, project):
             elif kind in ("readToolCall", "grepToolCall", "globToolCall") and event.get("subtype") == "started":
                 reads.append(str(args.get("path") or args.get("targetDirectory") or ""))
     workers = sorted(tasks.values(), key=lambda t: t["start"])
-    roots = (str(Path(project)), str(Path(project).resolve()))
-    skill_reads = [p for p in reads if "/skills/oversee/" in p]
+    # Compare forward-slash forms: Cursor reports absolute paths, and Windows paths use backslashes.
+    roots = tuple({str(project).replace("\\", "/"), Path(project).as_posix(), Path(project).resolve().as_posix()})
+    skill_reads = [p for p in (r.replace("\\", "/") for r in reads) if "/skills/oversee/" in p]
     checks = {"skill_from_fixture": all(p.startswith(roots) for p in skill_reads),
               "no_transcript_reads": not any("agent-transcripts" in p for p in reads)}
     report = {"usage": result.get("usage"), "duration_ms": result.get("duration_ms"), "manager_model": next(
