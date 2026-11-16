@@ -10,7 +10,7 @@ Check the running version's tool schema first; v2 behavior changed between relea
 - Waiting: in v2.3.0 subagents always run in the background. The call returns a `sessionID` at once and a `<subagent>` message arrives when the child goes idle. Launch the batch in one turn, then end the turn without text; do not sleep or poll. Earlier v2 releases had a `background` flag; there, a foreground call blocks.
 - Retry: pass the returned `sessionID` to continue that child with its context.
 - Plan: `plan` restricts edits, `build` implements. Use a native transition if exposed, otherwise ask the user to switch agents (Shift+Tab). Verify the mode changed before dispatch.
-- Child profiles have their own permissions; keep restrictions explicit. Headless `run --auto` approves everything not denied; never add it as a convenience.
+- Child profiles have their own permissions; keep restrictions explicit. Headless `run --auto` approves everything not denied; never add it as a convenience. Observed v2.0.29 headless form: `opencode run --model <selector> --agent <id> --session <id> --format json`.
 - You are invoked as `@oversee` or through the `skill` tool.
 
 ## v1

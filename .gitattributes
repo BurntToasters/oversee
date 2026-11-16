@@ -1,2 +1,2 @@
-# Markdown uses LF.
-*.md text eol=lf
+# Text files use LF on every platform.
+* text=auto eol=lf

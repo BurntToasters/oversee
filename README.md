@@ -60,7 +60,7 @@ It installs only `skills/oversee/` (`SKILL.md` and `references/`). Kiro CLI cust
 
 ### Cline
 
-The skills CLI writes Cline's copy to `~/.agents/skills`, but Cline's docs list only `~/.cline/skills` for global skills. After installing, link the skill there so `npx skills update` keeps it current. `npx skills remove` does not remove this link; delete it yourself.
+The skills CLI writes Cline's copy to `~/.agents/skills`, but Cline's docs list only `~/.cline/skills` for global skills. If `/oversee` does not appear in Cline after installing, link the skill there so `npx skills update` keeps it current; if it already appears, skip the link, or Cline may list it twice. `npx skills remove` does not remove this link; delete it yourself.
 
 ```bash
 mkdir -p ~/.cline/skills && ln -s ~/.agents/skills/oversee ~/.cline/skills/oversee
@@ -73,20 +73,22 @@ New-Item -ItemType Junction -Path "$env:USERPROFILE\.cline\skills\oversee" -Targ
 
 ### Migrating from the old install scripts
 
-The bundled install scripts were removed in 1.2.0. The skills CLI's global paths are Claude Code `~/.claude/skills`, Codex and Cline `~/.agents/skills`, Cursor `~/.cursor/skills`, OpenCode `~/.config/opencode/skills`, Copilot `~/.copilot/skills`, Antigravity `~/.gemini/config/skills`, and Kiro CLI `~/.kiro/skills`. `npx skills remove oversee -g` deletes a named skill folder from the agent folders it targets even if another installer put it there, but it does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. If you installed with the scripts, remove all six of their folders by hand, install with the skills CLI, then add the [Cline](#cline) link if you use Cline.
+The bundled install scripts were removed in 1.2.0. Since skills CLI 1.8.0, a global install puts Codex, Cursor, OpenCode, GitHub Copilot, and Cline in the shared `~/.agents/skills` only; Claude Code gets `~/.claude/skills`, Antigravity `~/.gemini/config/skills`, and Kiro CLI `~/.kiro/skills` (the CLI ignores `KIRO_HOME`). CLI 1.7.x also wrote `~/.cursor/skills`, `~/.config/opencode/skills`, and `~/.copilot/skills`; if you installed with it, delete `oversee` from those folders too, or Cursor and OpenCode may find it twice. `npx skills remove oversee -g` deletes a named skill folder from the agent folders it targets even if another installer put it there, but it does not know about `~/.cline/skills/oversee` or `~/.gemini/antigravity-cli/skills/oversee`. If you installed with the scripts or CLI 1.7.x, remove these folders by hand with the commands below, install with the skills CLI, then check [Cline](#cline) if you use it.
 
 Bash (macOS, Linux, WSL, Git Bash):
 
 ```bash
 rm -rf ~/.agents/skills/oversee ~/.claude/skills/oversee ~/.cline/skills/oversee \
-  ~/.gemini/config/skills/oversee ~/.gemini/antigravity-cli/skills/oversee ~/.kiro/skills/oversee
+  ~/.gemini/config/skills/oversee ~/.gemini/antigravity-cli/skills/oversee ~/.kiro/skills/oversee \
+  ~/.cursor/skills/oversee ~/.config/opencode/skills/oversee ~/.copilot/skills/oversee
 npx skills add BurntToasters/oversee -g
 ```
 
 PowerShell (Windows; untested):
 
 ```powershell
-'.agents\skills', '.claude\skills', '.cline\skills', '.gemini\config\skills', '.gemini\antigravity-cli\skills', '.kiro\skills' |
+'.agents\skills', '.claude\skills', '.cline\skills', '.gemini\config\skills', '.gemini\antigravity-cli\skills', '.kiro\skills',
+  '.cursor\skills', '.config\opencode\skills', '.copilot\skills' |
   ForEach-Object { Get-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:USERPROFILE "$_\oversee") } |
   ForEach-Object { if ($_.LinkType) { $_.Delete() } else { Remove-Item -Recurse -Force $_.FullName } }
 npx skills add BurntToasters/oversee -g
@@ -103,7 +105,7 @@ Run `npx skills remove oversee -g`. If copies from the old scripts remain, remov
 - **Invocation controls.** The payload carries a behavioral guard. Host-enforced controls are optional and not installed: in Claude Code, set `skillOverrides.oversee` to `user-invocable-only` in your settings (the `disable-model-invocation: true` frontmatter key also works there, but the claude.ai packager rejects it, so the payload omits it); in Codex, an `agents/openai.yaml` sidecar with `policy.allow_implicit_invocation: false`. OpenCode v2 honors the shipped `metadata.opencode/autoinvoke: "false"`, which hides the skill from the model's list while `@oversee` still loads it.
 - **Duplicate discovery.** OpenCode v2 and Cursor read both `~/.agents/skills` and `~/.claude/skills` (OpenCode also `~/.config/opencode/skills`; Cursor also `~/.cursor/skills` and `~/.codex/skills`), so one skill can be discovered twice. In OpenCode the later-registered copy wins.
 - **Codex.** Skills are read from `.agents/skills` in each folder from the working directory up to the repository root, `~/.agents/skills`, and `/etc/codex/skills`; Codex follows symlinked skill folders. The skills listing is capped by `skills.max_context_tokens`.
-- **Kiro CLI.** `KIRO_HOME` overrides the global `~/.kiro` folder; if you set it, check that the skill landed in that profile's `skills` folder and copy it there otherwise. The default agent finds skills automatically. A custom agent loads them only when its `resources` include `skill://` URIs (for example `skill://.kiro/skills/**/SKILL.md`), unless default resource inheritance is on. Workspace skills override same-name global skills.
+- **Kiro CLI.** `KIRO_HOME` overrides the global `~/.kiro` folder, but the skills CLI always writes `~/.kiro/skills`; if you set it, copy or link the skill into that profile's `skills` folder. The default agent finds skills automatically. A custom agent loads them only when its `resources` include `skill://` URIs (for example `skill://.kiro/skills/**/SKILL.md`), unless default resource inheritance is on. Workspace skills override same-name global skills.
 
 ## Usage
 
@@ -182,12 +184,13 @@ Checked 2026-11-16 against the v2.3.0 docs source; verify against your installed
 - `version.txt` is the skill's version source. Run `python bump-ver.py patch`, `minor`, `major`, or an exact version such as `0.2.0-rc.1`. The script synchronizes `version.txt`, skill metadata, and the README version line; it preserves line endings and leaves model/harness versions and historical evidence unchanged. Add new current-version declarations to `TARGETS` in the script.
 - Run `python bump-ver.py --check` before a release. Use `python bump-ver.py patch --dry-run` to preview. The script stops on version drift or missing declarations before changing files. Version tooling is development-only and is not installed with the skill.
 - Eval scenarios live in [`evals/evals.json`](evals/evals.json). The catalog includes manual/fault-injection scenarios as well as the three automated pilot cases; adding a scenario is not evidence it passed.
-- Run offline regression checks with `python -B -m unittest discover -s tests -v`. `tests/test_payload.py` checks the payload layout, frontmatter, byte budgets, and reference links. No dependencies beyond Python's standard library are needed for these tests.
+- Run offline regression checks with `python -B -m unittest discover -s tests -v`. `tests/test_payload.py` checks the payload layout, frontmatter, byte budgets, and reference links. No dependencies beyond Python's standard library are needed for these tests. CI runs them and `bump-ver.py --check` on Linux and Windows for every push and pull request (`.github/workflows/tests.yml`).
+- Maintainer host tables and their sources are in [`docs/hosts.md`](docs/hosts.md), which is not installed.
 - Run the paired pilot with [`evals/run.py`](evals/run.py); procedure and evidence limits are in [`evals/README.md`](evals/README.md).
 - Focused reruns can select cases and one arm; they are marked unpaired. Regrading rejects retained projects that differ from their recorded final hashes.
 - Repo conventions and remaining verification gaps are in [`AGENTS.md`](AGENTS.md).
 
-The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code and Cursor remain documentation-checked until live-tested; Copilot and Antigravity are best-effort and documentation-checked only.
+The earlier three-case score measured workflow compliance using summary logs; it did not establish coding superiority or cost savings. Native recorders retain OpenCode and Codex evidence, independently check resulting behavior, and report correctness, orchestration, time, and measured usage separately. Missing measurements remain unknown. Claude Code and Cursor remain documentation-checked until live-tested; Copilot, Cline, Antigravity, and Kiro CLI are best-effort and documentation-checked only.
 
 The Go pilot and two focused follow-ups passed overseen coding checks, including Plan-to-Build handoff. They still emitted routine narration, so result-only compliance remains unproven. Measured results and retained failures are documented in [`evals/README.md`](evals/README.md).
 

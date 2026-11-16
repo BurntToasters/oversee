@@ -13,7 +13,7 @@ metadata:
 
 Oversee is a way to implement coding work. You are the manager: you plan, brief and dispatch worker subagents, wait, audit their changes, and report. The workers write the code. Never change your own model.
 
-Everything you read or print stays in your context and is re-read every later turn: read only what decisions need. Write one worker-choice line before the first dispatch, then only the final report. Turns between them contain tool calls only, no text. Required handoff, clarification, blocker, and cancellation messages are the exceptions.
+Everything you read or print stays in your context and is re-read every later turn: read only what decisions need. Write one worker-choice line before the first dispatch, then only the final report. Turns between them contain tool calls only, no text. Required handoff, clarification, blocker, and cancellation messages, and announcing an authorized worker change, are the exceptions. If compaction drops these rules or your host reference, reopen them.
 
 ## When this skill applies
 
@@ -26,7 +26,7 @@ Three limits hold for the whole conversation, including turns long after the ski
 - A request for read-only work alone, such as `/oversee audit this repo`, has nothing to dispatch. Do it yourself as an ordinary request, give the findings, and mention that `/oversee` can implement the fixes.
 - A request for both, such as an audit followed by fixes, splits the same way. You audit, turn the actionable findings into pieces, and dispatch workers only for the fixes. Settle ambiguous findings and missing acceptance checks before dispatch.
 - If the user asks for workers to do the reading, do it yourself anyway and say so in one line.
-- Subagents the host launches on its own for planning or exploration are not oversee workers. They keep the host's defaults and never receive the worker model or effort.
+- Planning or exploration subagents the host launches itself are not oversee workers; they keep host defaults and never get the worker model or effort.
 
 **One run, then done.** A run ends when you deliver its final report, or when it is cancelled or stopped. After that you are no longer the manager, and this skill has nothing to say about the next message. Handle it the way you would if the skill had never loaded. The worker model and effort belonged to that run. They are not a standing preference for delegation; the only thing that may reuse them is a later oversee run that names no worker of its own.
 
@@ -39,7 +39,7 @@ So after a run, "audit the codebase", "review that change", or "how does this mo
 - Reuse a ready plan's scope, decisions, and acceptance checks. Do not replace it with a new design or re-explore what it settles; read only what splitting pieces, naming checks, and closing blocking gaps need.
 - If this run's workers already exist, keep their ownership and pending results; launch no duplicates.
 - For one small change, say direct implementation is cheaper and offer it; do not silently drop the requested roles.
-- The same invocation works in either mode: outside Plan mode, plan yourself and dispatch now; in Plan mode, follow section 2.
+- Outside Plan mode, plan yourself and dispatch now; in Plan mode, follow section 2.
 
 ## 2. Plan-mode handoff
 
@@ -49,7 +49,7 @@ When ready, use the host's native approval transition, or state the mode change 
 
 ## 3. Choose workers
 
-Before dispatch, open only this host's reference: [Claude Code](references/claude-code.md), [Codex](references/codex.md), [OpenCode](references/opencode.md), [Cursor](references/cursor.md), [GitHub Copilot](references/copilot.md), [Antigravity](references/antigravity.md), [Cline](references/cline.md), or [Kiro CLI](references/kiro.md). Tool names overlap; do not identify the host from one tool name. On an unlisted host, open none and use the live tool schema, which always takes precedence.
+Before dispatch, open only this host's reference: [Claude Code](references/claude-code.md), [Codex](references/codex.md), [OpenCode](references/opencode.md), [Cursor](references/cursor.md), [GitHub Copilot](references/copilot.md), [Antigravity](references/antigravity.md), [Cline](references/cline.md), or [Kiro CLI](references/kiro.md). Do not identify the host from one tool name. On an unlisted host, open none and use the live tool schema, which always takes precedence.
 
 1. **User choice:** resolve the named model and effort against the current catalog, preserving version and variant (IDs may be case-sensitive). Match names or shorthand only when unambiguous; prefer the session's provider only for the same model. Examples are not defaults or an allowlist. Without the user's agreement, do not substitute, drop an unsupported effort, or escalate; an unsupported `max` is not the highest available level.
 2. **Missing choice:** ask once before dispatch, suggesting a suitable available worker; keep any choice already given for this work. If only model or effort is named, choose the other by difficulty from supported settings.
@@ -63,7 +63,7 @@ An unavailable named model or effort is a choice to resolve, not a failed implem
 - Inspect the project and plan yourself; workers never research. Issue independent read-only commands together in one turn.
 - Define done as required behavior plus the project's real check commands from its documentation or CI, never invented. If nothing can verify the work, resolve verification before dispatch.
 - Split into a few useful pieces with exclusive file ownership. Shared-file edits and dependent pieces go in later batches. Queue pieces beyond concurrency limits without probing workers.
-- Before any worker starts, record a compact baseline. Clean tree: commit id and empty status. Dirty tree: staged, unstaged, and untracked paths plus their hashes. Save original contents outside the workspace only where the host allows writing there; otherwise keep the baseline in the conversation. Never write snapshot files inside the workspace, or print full diffs or whole files to build one. Without Git, hash the files. Never reset, stash, stage, or discard user edits.
+- Before any worker starts, record a compact baseline: commit id and short status. Dirty tree: also run `git stash create`; its id captures staged and unstaged edits without touching the index, files, or stash list. Hash untracked files. Never write snapshot files or print full diffs or whole files to build it. Without Git, hash the files. Never reset, stash, stage, or discard user edits; `git stash create` is not a stash.
 - Tell workers which existing edits to preserve. Refresh the comparison point after accepted batches; keep the original baseline for the final audit.
 
 ## 5. Brief each worker
@@ -75,7 +75,7 @@ Use fresh context where supported; never rely on inherited history. Keep scope, 
 - User requirements, plan decisions, existing edits and APIs to preserve, dependency/style constraints, permission boundaries.
 - Piece-scoped checks to run before reporting, expected behavior, and accepted dependencies; not the project-wide integration check, since parallel workers share the tree.
 - Stop and report rather than widen scope. No commits, pushes, permission weakening, or further delegation unless explicitly authorized.
-- Scratch files stay in scope and are removed before reporting; test temporary data must clean itself up.
+- Scratch files and test temporary data stay in scope and are removed before reporting.
 - "Your final message is the report", under 15 lines: `Changed` (paths), `Checks` (command and pass/fail, no logs), `Unfinished`, `Uncertain`.
 
 Describe outcomes, not steps, unless a step is a real constraint.
@@ -95,16 +95,16 @@ If native workers are unavailable, use a [headless fallback](references/headless
 Audit is your work, never a worker's. Check each finished batch against its briefs before dispatching the next:
 
 1. Read each report, then list changed paths for the whole workspace against the baseline: staged, unstaged, untracked, and deleted, including out-of-scope edits; never narrow it to a piece's files. Scope violations or leftover scratch files fail acceptance, never "harmless" notes.
-2. Read real diffs of changed paths; a `--stat` alone is insufficient. Read whole files only where a diff cannot show behavior. Confirm user edits survived. Reports are not proof; do not read worker transcripts routinely.
-3. Run each piece's acceptance checks yourself with the runner's own quiet option, one check per command, no pipes or redirection, since a pipe's exit code hides a failing check. Independent read-only inspections may share a turn; checks never share a command. Accept the piece or record a specific failure.
+2. Read real diffs of changed paths against the baseline (on a dirty tree, `git diff <stash-create id>`); a `--stat` alone is insufficient. Read new untracked files whole, other whole files only where a diff cannot show behavior. Confirm user edits survived. Reports are not proof; do not read worker transcripts routinely.
+3. Run each piece's acceptance checks yourself with the runner's own quiet option, one check per command, no pipes or redirection, since a pipe's exit code hides a failing check. Accept the piece or record a specific failure.
 4. Run the project's integration check after pieces pass; attribute failures to responsible pieces before retrying. Individual tests alone are not success.
 
 Retry only failed pieces, at most twice after the initial attempt. Resume the original worker if supported, sending the failing lines (not the log) and the required fix. A fresh worker receives the complete brief plus that failure evidence. Keep the chosen model and effort unless the user authorizes a change.
 
-After the second failed retry, stop dispatch, settle or cancel remaining workers, and report completed work, unfinished work, and blockers. Keep partial changes for review.
+After the second failed retry, stop dispatch, settle or cancel remaining workers, and report what finished, what did not, and blockers. Keep partial changes for review.
 
 ## 8. Report
 
-Remove any snapshot files first. Return only the result: what changed, checks and outcomes, and anything unfinished or blocked. No plan, worker logs, or audit notes unless requested.
+Return only the result: what changed, checks and outcomes, and anything unfinished or blocked. No plan, worker logs, or audit notes unless requested.
 
-The report ends the run. What the user asks next is an ordinary request under "When this skill applies", not more work for these workers.
+The report ends the run. The next request is ordinary (see "When this skill applies"), not work for these workers.
