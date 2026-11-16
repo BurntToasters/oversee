@@ -33,7 +33,7 @@ Switching from the old scripts: `npx skills remove oversee -g` does not know abo
 
 Since skills CLI 1.8.0, Codex, Cursor, OpenCode, Copilot, and Cline are installed only to `~/.agents/skills`. CLI 1.7.x also wrote `~/.cursor/skills`, `~/.config/opencode/skills`, and `~/.copilot/skills`; the README migration commands remove those too. Cline's docs list only `~/.cline/skills`: if `/oversee` is missing in Cline, link it there (README).
 
-## 1.2.0 (unreleased)
+## 1.2.0
 
 ### Removed
 
@@ -87,37 +87,3 @@ Since skills CLI 1.8.0, Codex, Cursor, OpenCode, Copilot, and Cline are installe
 ### Measured
 
 One with-skill run per case, 2026-11-16, same settings for both versions (details in `evals/README.md`). OpenCode 2.3.0 with Opus 5.5 medium managing DeepSeek V4.1 Flash max: parallel $0.331 → $0.202, plan handoff $0.357 → $0.298, ordinary question $0.102 → $0.095; 1.2.0 passed the silence check in both coding cases, 1.1.1 failed both. Claude Code 2.1.325 (`claude -p`, Opus 5.5 medium managing Haiku): $0.334 → $0.325 with background workers, where the host prompted for visible output after each silent turn end and silence failed; $0.262 once the manager blocked on its batch with `run_in_background: false`, with no intermediate text; $0.23-0.35 over three runs with fork mode on, which cannot block, using the one-line waiting message; $0.254 blocking, after the worker check rule above. The manager is 97-98% of cost. Codex 0.169.0 (1.2.0 only, `gpt-5.6-terra` medium managing `gpt-6-luna` max): all three smoke cases passed behavior and exact settings, and the parallel case passed silence; after the `python3` prompt fix, the parallel case passed every strict check. Cost is unknown. Cursor CLI 2026.11.13 (Grok 4.7 xhigh managing Composer 2.5): all three cases correct with per-call worker models; the coding cases failed silence, and the parallel manager skipped the baseline commands. Not a savings guarantee.
-
-## 1.1.1
-
-### Fixed
-
-- After a finished run, a later request such as "audit the codebase" could be treated as more oversee work and sent to the earlier run's worker model. A run now ends with its final report: later messages are ordinary requests, the manager role does not persist, and the worker choice is not a standing preference for subagents. A new run needs a new invocation.
-
-### Changed
-
-- Oversee is implementation-only. Workers change code; auditing, reviewing, mapping, research, and explanation are always done by the manager or main agent. The exception that let workers research or audit on explicit request is removed, because it was the route by which audit requests reached workers.
-- An audit-only or repo-mapping invocation dispatches no workers: the main agent does the work and mentions that `/oversee` can implement the fixes. An audit-and-fix invocation still works: the manager audits, workers fix.
-- No workers start in Plan mode, including read-only ones.
-- `SKILL.md` reorganized: a "When this skill applies" section states the three limits (invocation only, implementation only, one run then done) ahead of the run steps, and the description names the implementation-only scope.
-- `references/harnesses.md`: read-only built-in agents belong to the host and are never dispatched by oversee.
-- Eval catalog: scenarios 29, 37, and 38 now expect manager-only auditing and research; scenarios 40-44 cover post-run requests and read-only invocations. Catalog-only, not run live.
-
-## 1.1.0
-
-### Added
-
-- `npx skills add BurntToasters/oversee -g` is now the primary installer. The skill payload moved to `skills/oversee/` so the skills CLI installs only `SKILL.md` and `references/`; with the old root layout it copied the whole repository (evals, tests, installers) into every agent's skill folder.
-- A layout regression test checks that the repository root holds no `SKILL.md` and that `skills/oversee/` holds only the payload.
-
-### Changed
-
-- `install.sh`, `install.bat`, and `remote-install.ps1` read the payload from `skills/oversee/`. A script copied next to a payload still works. `install.sh` now skips a destination that is a symlink (for example one created by `npx skills add`) instead of aborting; the canonical `~/.agents/skills/oversee` copy is still updated.
-- `uninstall.sh` removes a dangling skill symlink left after the canonical copy is deleted.
-- README: switching from the scripts to `npx skills add` starts with the script uninstaller; otherwise the skills CLI replaces script-installed folders with links and leaves untracked copies for other agents.
-- `references/harnesses.md`, rechecked 2026-11-07: Claude Code per-call `model` accepts aliases only (full IDs belong in agent profiles), effort/model environment overrides, concurrency and nesting defaults; Codex model/effort precedence, thread cap, and skill directories; OpenCode v2 undocumented per-call model override and duplicate skill discovery; Cursor `is_background`/`readonly` and bracket options; Kiro CLI V3 as the default engine, no ad-hoc sub-agent definition in 2.x or V3, workspace agent files as the worker route, and effort precedence.
-- `bump-ver.py` and the eval recorders point at the new payload path.
-
-### Deprecated
-
-- The bundled install scripts (`install.sh`, `install.bat`, `uninstall.sh`, `uninstall.bat`, `remote-install.ps1`) and their `curl | bash` and `irm | iex` one-liners are deprecated and scheduled for removal in 1.2.0. Use `npx skills add BurntToasters/oversee -g` to install and `npx skills remove oversee -g` to uninstall. To switch, run the script uninstaller first.
