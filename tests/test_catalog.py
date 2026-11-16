@@ -28,6 +28,11 @@ class CatalogTests(unittest.TestCase):
             self.assertIn(name, by_name)
             self.assertEqual(by_name[name]["execution"], "pilot", name)
 
+    def test_pilot_prompts_request_no_verbose_checks(self):
+        by_name = {e["name"]: e for e in EVALS}
+        for name in CATALOG["pilot"]:
+            self.assertNotRegex(by_name[name]["prompt"], r"(?<!\S)-v(?!\S)", name)
+
     def test_only_pilot_or_scenario_execution(self):
         for entry in EVALS:
             self.assertIn(entry["execution"], {"pilot", "scenario"}, entry["name"])

@@ -50,7 +50,7 @@
       "name": "parallel",
       "fixture": "parallel",
       "execution": "pilot",
-      "prompt": "/oversee {worker}: use two independent workers. One owns left.py and tests/test_left.py: normalize_tag trims whitespace and lowercases tags. The other owns right.py and tests/test_right.py: parse_limit rejects zero and negative limits with ValueError. Preserve other behavior and add tests. Run python -m unittest discover -s tests -v.",
+      "prompt": "/oversee {worker}: use two independent workers. One owns left.py and tests/test_left.py: normalize_tag trims whitespace and lowercases tags. The other owns right.py and tests/test_right.py: parse_limit rejects zero and negative limits with ValueError. Preserve other behavior and add tests. Run python -m unittest discover -s tests -q.",
       "expectations": [
         "Two independently scoped workers overlap in time",
         "Announcement precedes dispatch",
@@ -63,7 +63,7 @@
       "name": "plan-handoff",
       "fixture": "notes-cli",
       "execution": "pilot",
-      "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run python -m unittest discover -s tests -v. /oversee {worker}",
+      "prompt": "Ready plan: First add store.find_notes(term, path=DEFAULT_PATH), matching title substrings case-insensitively and returning records in insertion order; empty term returns all. Add tests/test_search_store.py and validate it. After that piece is accepted, expose search <term> in notes.py, printing <id>: <title>; add tests/test_search_cli.py. Preserve existing commands and run python -m unittest discover -s tests -q. /oversee {worker}",
       "expectations": [
         "Plan phase makes no implementation changes or implementing dispatches, and no subagent runs with the requested worker setting",
         "Native transition enables execution without another skill invocation",
